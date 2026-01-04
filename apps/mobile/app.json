@@ -1,0 +1,69 @@
+{
+    "expo": {
+        "name": "TrueShift",
+        "slug": "trueshift",
+        "version": "1.0.0",
+        "orientation": "portrait",
+        "icon": "./assets/icon.png",
+        "userInterfaceStyle": "automatic",
+        "splash": {
+            "image": "./assets/splash.png",
+            "resizeMode": "contain",
+            "backgroundColor": "#0A0A0A"
+        },
+        "assetBundlePatterns": [
+            "**/*"
+        ],
+        "ios": {
+            "supportsTablet": true,
+            "bundleIdentifier": "com.trueshift.app",
+            "infoPlist": {
+                "NSLocationWhenInUseUsageDescription": "TrueShift uses your location to provide context-aware workout recommendations.",
+                "NSLocationAlwaysAndWhenInUseUsageDescription": "Background location helps TrueShift detect when you arrive at gyms or parks for automatic workout suggestions.",
+                "NSCameraUsageDescription": "TrueShift uses your camera to analyze exercise form and provide feedback.",
+                "NSMotionUsageDescription": "TrueShift tracks your movement to understand your activity patterns.",
+                "UIBackgroundModes": [
+                    "location",
+                    "fetch",
+                    "processing"
+                ]
+            }
+        },
+        "android": {
+            "adaptiveIcon": {
+                "foregroundImage": "./assets/adaptive-icon.png",
+                "backgroundColor": "#0A0A0A"
+            },
+            "package": "com.trueshift.app",
+            "permissions": [
+                "ACCESS_COARSE_LOCATION",
+                "ACCESS_FINE_LOCATION",
+                "ACCESS_BACKGROUND_LOCATION",
+                "CAMERA",
+                "ACTIVITY_RECOGNITION",
+                "RECEIVE_BOOT_COMPLETED",
+                "FOREGROUND_SERVICE"
+            ]
+        },
+        "plugins": [
+            [
+                "expo-location",
+                {
+                    "locationAlwaysAndWhenInUsePermission": "Allow TrueShift to use your location for workout context."
+                }
+            ],
+            [
+                "expo-camera",
+                {
+                    "cameraPermission": "Allow TrueShift to use your camera for form analysis."
+                }
+            ],
+            "expo-background-fetch"
+        ],
+        "extra": {
+            "eas": {
+                "projectId": "your-project-id"
+            }
+        }
+    }
+}

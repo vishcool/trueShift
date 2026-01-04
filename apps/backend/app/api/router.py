@@ -1,0 +1,39 @@
+"""
+TrueShift - API Router
+
+Central router that aggregates all API endpoints.
+"""
+
+from fastapi import APIRouter
+
+from app.api.routes import auth, events, state, health
+
+api_router = APIRouter()
+
+# Health endpoints (no prefix)
+api_router.include_router(
+    health.router,
+    prefix="/health",
+    tags=["Health"],
+)
+
+# Authentication endpoints
+api_router.include_router(
+    auth.router,
+    prefix="/auth",
+    tags=["Authentication"],
+)
+
+# Event ingestion endpoints
+api_router.include_router(
+    events.router,
+    prefix="/events",
+    tags=["Events"],
+)
+
+# State & AI endpoints
+api_router.include_router(
+    state.router,
+    prefix="/state",
+    tags=["State & AI"],
+)

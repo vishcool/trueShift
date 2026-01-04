@@ -1,0 +1,111 @@
+############################################
+# Node / React Native / Expo
+############################################
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.expo/
+.expo-shared/
+expo-env.d.ts
+dist/
+build/
+web-build/
+
+############################################
+# React Native
+############################################
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+ios/Pods/
+ios/build/
+ios/.xcworkspace/
+ios/DerivedData/
+*.xcuserstate
+
+############################################
+# Python / FastAPI / AI
+############################################
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.env
+.env.*
+venv/
+.venv/
+env/
+ENV/
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+############################################
+# Jupyter / ML
+############################################
+.ipynb_checkpoints/
+*.onnx
+*.pt
+*.pth
+*.h5
+*.pkl
+*.joblib
+
+############################################
+# OpenSearch / Data
+############################################
+data/
+opensearch-data/
+*.db
+*.sqlite
+
+############################################
+# Firebase / Secrets
+############################################
+firebase-debug.log
+firestore-debug.log
+google-services.json
+GoogleService-Info.plist
+serviceAccountKey.json
+
+############################################
+# Logs
+############################################
+logs/
+*.log
+
+############################################
+# OS files
+############################################
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+############################################
+# IDE / Editors
+############################################
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+
+############################################
+# CI / Build artifacts
+############################################
+coverage/
+*.lcov
+.eslintcache
+.cache/
+
+############################################
+# Misc
+############################################
+*.bak
+*.tmp
