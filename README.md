@@ -120,7 +120,3 @@ trueShift/
 | `/api/v1/state` | GET | Get user state |
 | `/api/v1/state/recommendations` | GET | Get recommendations |
 | `/api/v1/state/ai/coaching` | GET | Full AI coaching |
-
-## License
-
-MIT
