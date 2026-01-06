@@ -8,8 +8,7 @@ Following Google ADK patterns - agents are modular, stateless, and context-drive
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 from pydantic import BaseModel
-from pydantic import BaseModel
-from app.ai.llm_service import gemini_service
+import google.generativeai as genai
 
 from app.core.config import settings
 
@@ -86,8 +85,11 @@ class BaseAgent(ABC):
 
     def _init_client(self) -> None:
         """Initialize the Gemini API client."""
-        # Client is now handled by the global gemini_service
-        self.model = True # Just a flag to say we are ready
+        if settings.google_api_key:
+            genai.configure(api_key=settings.google_api_key)
+            self.model = genai.GenerativeModel(settings.gemini_model)
+        else:
+            self.model = None
 
     def _get_system_prompt(self) -> str:
         """Build the full system prompt."""
@@ -126,32 +128,24 @@ class BaseAgent(ABC):
             return self._dev_fallback(prompt, context)
 
         try:
-        try:
             # Build the full prompt with context
-            system_prompt = self._get_system_prompt()
-            context_str = self._format_context(context)
-            
-            full_user_prompt = f"""
+            full_prompt = f"""
+{self._get_system_prompt()}
+
 USER CONTEXT:
-{context_str}
+{self._format_context(context)}
 
 TASK:
 {prompt}
 """
-            
-            response = await gemini_service.generate_content(
-                prompt=full_user_prompt,
-                system_instruction=system_prompt,
-                temperature=temperature
+            response = await self.model.generate_content_async(
+                full_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=temperature,
+                    max_output_tokens=1024,
+                ),
             )
-            
-            if "error" in response:
-                return f"Error: {response['error']}"
-                
-            content = response.get("content", "")
-            if isinstance(content, dict):
-                return json.dumps(content)
-            return str(content)
+            return response.text
 
         except Exception as e:
             print(f"LLM call failed: {e}")
