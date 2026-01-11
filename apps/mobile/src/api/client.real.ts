@@ -4,7 +4,7 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import * as SecureStore from 'expo-secure-store';
-import { UserResponse, ConsentUpdate, EventPayload, UserState, Recommendation, AICoaching } from './types';
+import { UserResponse, ConsentUpdate, EventPayload, UserState, Recommendation, AICoaching, VisionAnalysisResponse } from './types';
 
 // API Configuration
 const API_BASE_URL = __DEV__
@@ -108,6 +108,14 @@ export const api = {
     health: {
         check: () =>
             apiClient.get('/health'),
+    },
+
+    // Vision
+    vision: {
+        analyzeChunk: (data: FormData) =>
+            apiClient.post<VisionAnalysisResponse>('/vision/analyze-chunk', data, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            }),
     },
 };
 

@@ -48,6 +48,7 @@ export interface Recommendation {
     priority: number;
     actions: Record<string, unknown>[];
     confidence: number;
+    // ...
 }
 
 export interface AICoaching {
@@ -55,4 +56,13 @@ export interface AICoaching {
     coaching: Record<string, unknown> | null;
     workout: Record<string, unknown> | null;
     errors: string[];
+}
+
+export interface VisionAnalysisResponse {
+    status: string;
+    data: {
+        form_score: number;
+        feedback: string;
+        issues?: string[];
+    };
 }

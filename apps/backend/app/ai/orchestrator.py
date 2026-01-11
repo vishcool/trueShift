@@ -11,8 +11,14 @@ from datetime import datetime, timezone
 from app.ai.agents.base_agent import AgentContext, AgentResponse
 from app.ai.agents.context_agent import ContextAgent
 from app.ai.agents.coaching_agent import CoachingAgent
+from app.ai.agents.coaching_agent import CoachingAgent
 from app.ai.agents.workout_agent import WorkoutAgent
+from app.ai.agents.mental_agent import MentalWellnessAgent
+from app.ai.agents.recovery_agent import RecoveryAgent
 from app.models.user_state import UserState
+from app.models.conversation import ConversationLog
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, desc
 
 
 class OrchestratorResult:
@@ -26,14 +32,22 @@ class OrchestratorResult:
         timestamp: datetime,
         context_summary: Optional[dict] = None,
         coaching: Optional[dict] = None,
+        context_summary: Optional[dict] = None,
+        coaching: Optional[dict] = None,
         workout: Optional[dict] = None,
+        mental: Optional[dict] = None,
+        recovery: Optional[dict] = None,
         errors: list[str] = None,
     ):
         self.user_id = user_id
         self.timestamp = timestamp
         self.context_summary = context_summary
         self.coaching = coaching
+        self.context_summary = context_summary
+        self.coaching = coaching
         self.workout = workout
+        self.mental = mental
+        self.recovery = recovery
         self.errors = errors or []
 
     def to_dict(self) -> dict:
@@ -42,7 +56,10 @@ class OrchestratorResult:
             "timestamp": self.timestamp.isoformat(),
             "context_summary": self.context_summary,
             "coaching": self.coaching,
+            "coaching": self.coaching,
             "workout": self.workout,
+            "mental": self.mental,
+            "recovery": self.recovery,
             "errors": self.errors,
         }
 
@@ -62,6 +79,8 @@ class AIOrchestrator:
         self.context_agent = ContextAgent()
         self.coaching_agent = CoachingAgent()
         self.workout_agent = WorkoutAgent()
+        self.mental_agent = MentalWellnessAgent()
+        self.recovery_agent = RecoveryAgent()
 
     async def process_full_pipeline(
         self,
@@ -118,6 +137,22 @@ class AIOrchestrator:
         if not workout_result.success:
             errors.append(f"Workout Agent failed: {workout_result.content}")
 
+        mental_result = await self._run_agent(
+            self.mental_agent,
+            context,
+            "Mental Wellness Agent",
+        )
+        if not mental_result.success:
+            errors.append(f"Mental Agent failed: {mental_result.content}")
+
+        recovery_result = await self._run_agent(
+            self.recovery_agent,
+            context,
+            "Recovery Agent",
+        )
+        if not recovery_result.success:
+            errors.append(f"Recovery Agent failed: {recovery_result.content}")
+
         # Build result
         return OrchestratorResult(
             user_id=user_id,
@@ -125,6 +160,8 @@ class AIOrchestrator:
             context_summary=context_result.content if context_result.success else None,
             coaching=coaching_result.content if coaching_result.success else None,
             workout=workout_result.content if workout_result.success else None,
+            mental=mental_result.content if mental_result.success else None,
+            recovery=recovery_result.content if recovery_result.success else None,
             errors=errors,
         )
 
@@ -188,6 +225,80 @@ class AIOrchestrator:
                 content=f"Agent error: {str(e)}",
                 confidence=0.0,
             )
+
+    async def process_chat_message(
+        self,
+        db: AsyncSession,
+        user_id: str,
+        message: str,
+        user_state: UserState,
+    ) -> AgentResponse:
+        """
+        Process a single chat message from the user.
+        
+        Flow:
+        1. Save User Message
+        2. Hydrate History
+        3. Determine Agent (default to CoachingAgent for now)
+        4. Run Agent
+        5. Save Agent Response
+        """
+        # 1. Save User Message
+        user_log = ConversationLog(
+            user_id=user_id,
+            role="user",
+            content=message
+        )
+        db.add(user_log)
+        await db.commit()
+        
+        # 2. Hydrate History
+        history = await self._get_chat_history(db, user_id)
+        
+        # Build Context
+        context = AgentContext(
+            user_id=user_id,
+            user_state=user_state.get_context_summary() if hasattr(user_state, 'get_context_summary') else user_state,
+            conversation_history=history
+        )
+        
+        # 3/4. Run Agent (Default to CoachingAgent for general chat)
+        # In future, we can have a router here
+        response = await self.coaching_agent.process(context)
+        
+        # 5. Save Agent Response
+        if response.success:
+            content_str = str(response.content)
+            if isinstance(response.content, dict):
+                content_str = response.content.get("summary", str(response.content))
+                
+            model_log = ConversationLog(
+                user_id=user_id,
+                role="model",
+                agent_name=response.agent_name,
+                content=content_str
+            )
+            db.add(model_log)
+            await db.commit()
+            
+        return response
+
+    async def _get_chat_history(self, db: AsyncSession, user_id: str, limit: int = 10) -> list[dict]:
+        """
+        Fetch recent chat history for context.
+        """
+        # Fetch last N messages
+        stmt = (
+            select(ConversationLog)
+            .where(ConversationLog.user_id == user_id)
+            .order_by(desc(ConversationLog.created_at))
+            .limit(limit)
+        )
+        result = await db.execute(stmt)
+        logs = result.scalars().all()
+        
+        # Reverse to chronological order for LLM
+        return [log.to_dict() for log in reversed(logs)]
 
 
 # Global orchestrator instance

@@ -110,6 +110,19 @@ export const api = {
     health: {
         check: () => delay(200, { status: 'ok', version: '1.0.0-mock' }),
     },
+
+    // Vision (Mock)
+    vision: {
+        analyzeChunk: (data: FormData) =>
+            delay(300, {
+                status: 'success',
+                data: {
+                    form_score: 85 + Math.random() * 10,
+                    feedback: Math.random() > 0.7 ? "Keep your back straight" : "Good form",
+                    issues: Math.random() > 0.8 ? ["posture_warning"] : []
+                }
+            })
+    },
 };
 
 export const authToken = {
