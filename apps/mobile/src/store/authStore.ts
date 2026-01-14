@@ -6,7 +6,7 @@
  */
 
 import { create } from 'zustand';
-import { api, authToken, UserResponse } from '../api/client';
+import { api, authToken, UserResponse, UserProfileUpdate } from '../api/client';
 
 interface AuthState {
     // State
@@ -21,6 +21,7 @@ interface AuthState {
     setToken: (token: string) => Promise<void>;
     logout: () => Promise<void>;
     updateConsent: (consents: Record<string, boolean>) => Promise<void>;
+    updateProfile: (data: UserProfileUpdate) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -95,6 +96,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             }
         } catch (error) {
             set({ error: 'Failed to update consent' });
+            throw error;
+        }
+    },
+
+    // Update profile
+    updateProfile: async (data: UserProfileUpdate) => {
+        try {
+            const response = await api.auth.updateProfile(data);
+            set({ user: response.data });
+        } catch (error) {
+            set({ error: 'Failed to update profile' });
             throw error;
         }
     },

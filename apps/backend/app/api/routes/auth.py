@@ -45,6 +45,17 @@ class ConsentUpdateRequest(BaseModel):
     data_analytics: Optional[bool] = None
 
 
+class UserProfileUpdateRequest(BaseModel):
+    """Request body for updating user profile."""
+    display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    # Fitness Profile Data
+    fitness_goals: Optional[list[str]] = None
+    equipment: Optional[list[str]] = None
+    fitness_level: Optional[str] = None
+
+
+
 class UserResponse(BaseModel):
     """User response model."""
     id: str
@@ -220,3 +231,64 @@ async def update_consent(
         consents=user.get_consent_status(),
         updated_at=user.consent_updated_at.isoformat(),
     )
+
+
+@router.put("/me", response_model=UserResponse)
+async def update_profile(
+    request: UserProfileUpdateRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update user profile and fitness preferences.
+    """
+    result = await db.execute(
+        select(User).where(User.firebase_uid == user_id)
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Update basic profile
+    if request.display_name is not None:
+        user.display_name = request.display_name
+    if request.avatar_url is not None:
+        user.avatar_url = request.avatar_url
+
+    # Update fitness profile in preferences
+    # We load existing prefs, update, and save back
+    prefs = dict(user.preferences) if user.preferences else {}
+    fitness_profile = prefs.get("fitness_profile", {})
+    
+    if request.fitness_goals is not None:
+        fitness_profile["goals"] = request.fitness_goals
+    if request.equipment is not None:
+        fitness_profile["equipment"] = request.equipment
+    if request.fitness_level is not None:
+        fitness_profile["level"] = request.fitness_level
+        
+    prefs["fitness_profile"] = fitness_profile
+    user.preferences = prefs
+
+    # If this is the first time setting goals, we mark onboarding as done
+    if request.fitness_goals and not user.onboarding_completed:
+        user.onboarding_completed = True
+
+    await db.commit()
+    await db.refresh(user)
+
+    return UserResponse(
+        id=user.id,
+        firebase_uid=user.firebase_uid,
+        email=user.email,
+        display_name=user.display_name,
+        is_active=user.is_active,
+        is_premium=user.is_premium,
+        onboarding_completed=user.onboarding_completed,
+        consent_status=user.get_consent_status(),
+    )
+

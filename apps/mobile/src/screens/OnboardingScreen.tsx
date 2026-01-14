@@ -11,6 +11,7 @@ import {
     StyleSheet,
     TouchableOpacity,
     ScrollView,
+    TextInput,
 } from 'react-native';
 
 import { useAuth } from '../hooks/useAuth';
@@ -18,9 +19,21 @@ import { requestPermissionWithExplanation } from '../utils/permissions';
 
 type OnboardingStep = 'welcome' | 'permissions' | 'consent' | 'goals';
 
+const GOALS = ["Build Muscle", "Lose Weight", "Improve Stamina", "Flexibility"];
+const EQUIPMENT = ["Full Gym", "Dumbbells Only", "Bodyweight", "Resistance Bands"];
+const LEVELS = ["Beginner", "Intermediate", "Advanced"];
+
 export function OnboardingScreen() {
-    const { updateConsent } = useAuth();
+    const { updateConsent, updateProfile } = useAuth();
     const [step, setStep] = useState<OnboardingStep>('welcome');
+    const [isLoading, setIsLoading] = useState(false);
+
+    // Profile Data
+    const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
+    const [selectedEquipment, setSelectedEquipment] = useState<string[]>([]);
+    const [selectedLevel, setSelectedLevel] = useState<string>("Intermediate");
+
+    // Consent Data
     const [consents, setConsents] = useState({
         location_tracking: false,
         health_data: false,
@@ -38,13 +51,36 @@ export function OnboardingScreen() {
             await updateConsent(consents);
             setStep('goals');
         } else if (step === 'goals') {
-            // Complete onboarding (backend marks as complete)
-            await updateConsent({ ...consents });
+            setIsLoading(true);
+            try {
+                // Save profile details and mark onboarding complete (handled by backend if goals present)
+                await updateProfile({
+                    fitness_goals: selectedGoals,
+                    equipment: selectedEquipment,
+                    fitness_level: selectedLevel,
+                });
+            } catch (e) {
+                console.error("Failed to update profile", e);
+            } finally {
+                setIsLoading(false);
+            }
         }
     };
 
     const toggleConsent = (key: keyof typeof consents) => {
         setConsents((prev) => ({ ...prev, [key]: !prev[key] }));
+    };
+
+    const toggleGoal = (goal: string) => {
+        setSelectedGoals(prev =>
+            prev.includes(goal) ? prev.filter(g => g !== goal) : [...prev, goal]
+        );
+    };
+
+    const toggleEquipment = (eq: string) => {
+        setSelectedEquipment(prev =>
+            prev.includes(eq) ? prev.filter(e => e !== eq) : [...prev, eq]
+        );
     };
 
     const requestPermission = async (type: 'location_foreground' | 'camera' | 'notifications') => {
@@ -160,20 +196,65 @@ export function OnboardingScreen() {
                 {step === 'goals' && (
                     <View style={styles.stepContent}>
                         <Text style={styles.emoji}>🎯</Text>
-                        <Text style={styles.title}>You're All Set!</Text>
+                        <Text style={styles.title}>Your Profile</Text>
                         <Text style={styles.description}>
-                            TrueShift will learn from your patterns and provide increasingly
-                            personalized coaching over time.
+                            Help us tailor your workouts.
                         </Text>
+
+                        <View style={styles.section}>
+                            <Text style={styles.sectionTitle}>Fitness Level</Text>
+                            <View style={styles.chipsContainer}>
+                                {LEVELS.map(level => (
+                                    <TouchableOpacity
+                                        key={level}
+                                        style={[styles.chip, selectedLevel === level && styles.chipActive]}
+                                        onPress={() => setSelectedLevel(level)}
+                                    >
+                                        <Text style={[styles.chipText, selectedLevel === level && styles.chipTextActive]}>{level}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+
+                        <View style={styles.section}>
+                            <Text style={styles.sectionTitle}>Goals</Text>
+                            <View style={styles.chipsContainer}>
+                                {GOALS.map(goal => (
+                                    <TouchableOpacity
+                                        key={goal}
+                                        style={[styles.chip, selectedGoals.includes(goal) && styles.chipActive]}
+                                        onPress={() => toggleGoal(goal)}
+                                    >
+                                        <Text style={[styles.chipText, selectedGoals.includes(goal) && styles.chipTextActive]}>{goal}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+
+                        <View style={styles.section}>
+                            <Text style={styles.sectionTitle}>Equipment</Text>
+                            <View style={styles.chipsContainer}>
+                                {EQUIPMENT.map(eq => (
+                                    <TouchableOpacity
+                                        key={eq}
+                                        style={[styles.chip, selectedEquipment.includes(eq) && styles.chipActive]}
+                                        onPress={() => toggleEquipment(eq)}
+                                    >
+                                        <Text style={[styles.chipText, selectedEquipment.includes(eq) && styles.chipTextActive]}>{eq}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+
                     </View>
                 )}
             </ScrollView>
 
             {/* Continue Button */}
             <View style={styles.footer}>
-                <TouchableOpacity style={styles.continueButton} onPress={handleNext}>
+                <TouchableOpacity style={styles.continueButton} onPress={handleNext} disabled={isLoading}>
                     <Text style={styles.continueText}>
-                        {step === 'goals' ? "Let's Go" : 'Continue'}
+                        {isLoading ? "Saving..." : (step === 'goals' ? "Let's Go" : 'Continue')}
                     </Text>
                 </TouchableOpacity>
             </View>
@@ -213,6 +294,40 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 24,
         maxWidth: 320,
+    },
+    section: {
+        width: '100%',
+        marginTop: 24,
+    },
+    sectionTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#DDD',
+        marginBottom: 12,
+    },
+    chipsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    chip: {
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        backgroundColor: '#1F1F1F',
+        borderWidth: 1,
+        borderColor: '#333',
+    },
+    chipActive: {
+        backgroundColor: '#4338ca', // Indigo 800
+        borderColor: '#6366F1',
+    },
+    chipText: {
+        color: '#AAA',
+    },
+    chipTextActive: {
+        color: '#FFF',
+        fontWeight: '600',
     },
     permissionList: {
         width: '100%',

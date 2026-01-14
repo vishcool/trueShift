@@ -22,6 +22,14 @@ export interface ConsentUpdate {
     data_analytics?: boolean;
 }
 
+export interface UserProfileUpdate {
+    display_name?: string;
+    avatar_url?: string;
+    fitness_goals?: string[];
+    equipment?: string[];
+    fitness_level?: string;
+}
+
 export interface EventPayload {
     event_type: string;
     payload: Record<string, unknown>;
@@ -64,5 +72,29 @@ export interface VisionAnalysisResponse {
         form_score: number;
         feedback: string;
         issues?: string[];
+    };
+}
+
+export interface WorkoutGenerationRequest {
+    target_muscle_group?: string;
+    duration_minutes?: number;
+    equipment?: string[];
+    fitness_level?: string;
+    goals?: string;
+}
+
+export interface WorkoutPlanResponse {
+    id: string;
+    created_at: string;
+    status: string;
+    plan_data: {
+        overview: string;
+        exercises: {
+            name: string;
+            sets: number | string;
+            reps: number | string;
+            rest_seconds?: number;
+            notes?: string;
+        }[];
     };
 }

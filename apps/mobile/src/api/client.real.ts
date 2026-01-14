@@ -4,7 +4,7 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import * as SecureStore from 'expo-secure-store';
-import { UserResponse, ConsentUpdate, EventPayload, UserState, Recommendation, AICoaching, VisionAnalysisResponse } from './types';
+import { UserResponse, ConsentUpdate, EventPayload, UserState, Recommendation, AICoaching, VisionAnalysisResponse, UserProfileUpdate, WorkoutGenerationRequest, WorkoutPlanResponse } from './types';
 
 // API Configuration
 const API_BASE_URL = __DEV__
@@ -73,6 +73,9 @@ export const api = {
 
         updateConsent: (consents: ConsentUpdate) =>
             apiClient.put('/auth/consent', consents),
+
+        updateProfile: (data: UserProfileUpdate) =>
+            apiClient.put<UserResponse>('/auth/me', data),
     },
 
     // Events
@@ -116,6 +119,15 @@ export const api = {
             apiClient.post<VisionAnalysisResponse>('/vision/analyze-chunk', data, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             }),
+    },
+
+    // Workout
+    workout: {
+        generate: (data: WorkoutGenerationRequest) =>
+            apiClient.post<WorkoutPlanResponse>('/workout/generate', data),
+
+        log: (planId: string, completionData: Record<string, unknown>) =>
+            apiClient.post<WorkoutPlanResponse>('/workout/log', { plan_id: planId, completion_data: completionData }),
     },
 };
 

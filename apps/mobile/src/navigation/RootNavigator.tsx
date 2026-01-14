@@ -14,13 +14,15 @@ import { useAuth } from '../hooks/useAuth';
 import { HomeScreen } from '../screens/HomeScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { OnboardingScreen } from '../screens/OnboardingScreen';
+import { WorkoutGenScreen } from '../screens/WorkoutGenScreen';
 import VisionRecordingScreen from '../screens/VisionRecordingScreen';
 
 export type RootStackParamList = {
     Login: undefined;
     Onboarding: undefined;
     Home: undefined;
-    Vision: undefined;
+    Vision: { planId?: string; exercises?: any[] } | undefined;
+    WorkoutGen: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -55,6 +57,7 @@ export function RootNavigator() {
                 <Stack.Screen name="Home" component={HomeScreen} />
             )}
             {/* Shared Screens */}
+            <Stack.Screen name="WorkoutGen" component={WorkoutGenScreen} />
             <Stack.Screen name="Vision" component={VisionRecordingScreen} />
         </Stack.Navigator>
     );

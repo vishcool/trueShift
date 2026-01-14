@@ -3,7 +3,7 @@
  */
 
 import * as SecureStore from 'expo-secure-store';
-import { UserResponse, ConsentUpdate, EventPayload, UserState, Recommendation, AICoaching } from './types';
+import { UserResponse, ConsentUpdate, EventPayload, UserState, Recommendation, AICoaching, UserProfileUpdate, WorkoutGenerationRequest, WorkoutPlanResponse } from './types';
 
 const AUTH_TOKEN_KEY = 'auth_token';
 
@@ -42,6 +42,9 @@ export const api = {
 
         updateConsent: (consents: ConsentUpdate) =>
             delay(500, { consents: { ...MOCK_USER.consent_status, ...consents } }),
+
+        updateProfile: (data: UserProfileUpdate) =>
+            delay(500, { ...MOCK_USER, ...data } as UserResponse),
     },
 
     // Events
@@ -122,6 +125,33 @@ export const api = {
                     issues: Math.random() > 0.8 ? ["posture_warning"] : []
                 }
             })
+    },
+
+    // Workout
+    workout: {
+        generate: (data: WorkoutGenerationRequest) =>
+            delay(2000, {
+                id: 'plan_' + Date.now(),
+                created_at: new Date().toISOString(),
+                status: 'generated',
+                plan_data: {
+                    overview: `Focus on ${data.target_muscle_group || 'Full Body'}`,
+                    exercises: [
+                        { name: 'Pushups', sets: 3, reps: 10, rest_seconds: 60, notes: 'Keep core tight' },
+                        { name: 'Squats', sets: 3, reps: 12, rest_seconds: 60, notes: 'Go deep' },
+                        { name: 'Plank', sets: 3, reps: '30s', rest_seconds: 45, notes: 'Straight line' }
+                    ]
+                }
+            } as WorkoutPlanResponse),
+
+        log: (planId: string, completionData: Record<string, unknown>) =>
+            delay(500, {
+                id: planId,
+                created_at: new Date().toISOString(),
+                status: 'completed',
+                plan_data: { overview: 'Mock Plan', exercises: [] },
+                completion_data: completionData
+            } as WorkoutPlanResponse),
     },
 };
 

@@ -13,6 +13,7 @@ import {
     RefreshControl,
     TouchableOpacity,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../api/client';
@@ -20,6 +21,7 @@ import { useAuth } from '../hooks/useAuth';
 import { offlineCache } from '../services/OfflineCache';
 
 export function HomeScreen() {
+    const navigation = useNavigation<any>();
     const { user, logout } = useAuth();
 
     // Fetch user state
@@ -59,10 +61,24 @@ export function HomeScreen() {
             <View style={styles.header}>
                 <View>
                     <Text style={styles.greeting}>
-                        Hey, {user?.display_name || 'Athlete'} 👋
+                        Hey, {user?.display_name || 'Athlete'}
                     </Text>
                     <Text style={styles.subtitle}>Ready to crush it today?</Text>
                 </View>
+                <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={() => navigation.navigate('WorkoutGen')}
+                >
+                    <Text style={styles.actionIcon}>💪</Text>
+                    <Text style={styles.actionText}>Workout</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={() => navigation.navigate('Vision')}
+                >
+                    <Text style={styles.actionIcon}>🎥</Text>
+                    <Text style={styles.actionText}>Record Scope</Text>
+                </TouchableOpacity>
                 <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
                     <Text style={styles.logoutText}>Logout</Text>
                 </TouchableOpacity>
@@ -82,19 +98,19 @@ export function HomeScreen() {
                 <View style={styles.statusGrid}>
                     <View style={styles.statusCard}>
                         <Text style={styles.statusValue}>
-                            {stateData?.physical?.steps_today || 0}
+                            {(stateData?.physical?.steps_today as number) || 0}
                         </Text>
                         <Text style={styles.statusLabel}>Steps</Text>
                     </View>
                     <View style={styles.statusCard}>
                         <Text style={styles.statusValue}>
-                            {stateData?.physical?.active_minutes || 0}
+                            {(stateData?.physical?.active_minutes as number) || 0}
                         </Text>
                         <Text style={styles.statusLabel}>Active Min</Text>
                     </View>
                     <View style={styles.statusCard}>
                         <Text style={styles.statusValue}>
-                            {stateData?.physical?.workouts_this_week || 0}
+                            {(stateData?.physical?.workouts_this_week as number) || 0}
                         </Text>
                         <Text style={styles.statusLabel}>Workouts</Text>
                     </View>
@@ -105,7 +121,7 @@ export function HomeScreen() {
                     <Text style={styles.sectionTitle}>Recovery Status</Text>
                     <View style={styles.recoveryCard}>
                         <Text style={styles.recoveryStatus}>
-                            {stateData?.physical?.recovery_status?.replace('_', ' ') || 'Unknown'}
+                            {String(stateData?.physical?.recovery_status || 'Unknown').replace(/_/g, ' ')}
                         </Text>
                         <Text style={styles.recoverySubtext}>
                             Based on sleep and activity data
@@ -249,7 +265,18 @@ const styles = StyleSheet.create({
     emptyText: {
         fontSize: 14,
         color: '#6B7280',
-        textAlign: 'center',
         paddingVertical: 20,
+    },
+    actionBtn: {
+        alignItems: 'center',
+        padding: 5,
+    },
+    actionIcon: {
+        fontSize: 24,
+        marginBottom: 2,
+    },
+    actionText: {
+        fontSize: 10,
+        color: '#A5B4FC',
     },
 });

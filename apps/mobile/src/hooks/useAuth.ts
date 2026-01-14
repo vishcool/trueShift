@@ -6,7 +6,7 @@
 
 import { useCallback } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { api, authToken, UserResponse } from '../api/client';
+import { api, authToken, UserResponse, UserProfileUpdate } from '../api/client';
 
 interface UseAuthResult {
     user: UserResponse | null;
@@ -16,6 +16,7 @@ interface UseAuthResult {
     login: (firebaseToken: string) => Promise<void>;
     logout: () => Promise<void>;
     updateConsent: (consents: Record<string, boolean>) => Promise<void>;
+    updateProfile: (data: UserProfileUpdate) => Promise<void>;
 }
 
 export function useAuth(): UseAuthResult {
@@ -28,6 +29,7 @@ export function useAuth(): UseAuthResult {
         setToken,
         logout: storeLogout,
         updateConsent: storeUpdateConsent,
+        updateProfile: storeUpdateProfile,
     } = useAuthStore();
 
     /**
@@ -56,6 +58,13 @@ export function useAuth(): UseAuthResult {
         await storeUpdateConsent(consents);
     }, [storeUpdateConsent]);
 
+    /**
+     * Update user profile
+     */
+    const updateProfile = useCallback(async (data: UserProfileUpdate) => {
+        await storeUpdateProfile(data);
+    }, [storeUpdateProfile]);
+
     return {
         user,
         isAuthenticated,
@@ -64,5 +73,6 @@ export function useAuth(): UseAuthResult {
         login,
         logout,
         updateConsent,
+        updateProfile,
     };
 }
