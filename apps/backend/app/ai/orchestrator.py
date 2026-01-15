@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 from app.ai.agents.base_agent import AgentContext, AgentResponse
 from app.ai.agents.context_agent import ContextAgent
 from app.ai.agents.coaching_agent import CoachingAgent
-from app.ai.agents.coaching_agent import CoachingAgent
 from app.ai.agents.workout_agent import WorkoutAgent
 from app.ai.agents.mental_agent import MentalWellnessAgent
 from app.ai.agents.recovery_agent import RecoveryAgent
@@ -32,8 +31,6 @@ class OrchestratorResult:
         timestamp: datetime,
         context_summary: Optional[dict] = None,
         coaching: Optional[dict] = None,
-        context_summary: Optional[dict] = None,
-        coaching: Optional[dict] = None,
         workout: Optional[dict] = None,
         mental: Optional[dict] = None,
         recovery: Optional[dict] = None,
@@ -41,8 +38,6 @@ class OrchestratorResult:
     ):
         self.user_id = user_id
         self.timestamp = timestamp
-        self.context_summary = context_summary
-        self.coaching = coaching
         self.context_summary = context_summary
         self.coaching = coaching
         self.workout = workout
@@ -55,7 +50,6 @@ class OrchestratorResult:
             "user_id": self.user_id,
             "timestamp": self.timestamp.isoformat(),
             "context_summary": self.context_summary,
-            "coaching": self.coaching,
             "coaching": self.coaching,
             "workout": self.workout,
             "mental": self.mental,

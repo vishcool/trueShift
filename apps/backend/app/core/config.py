@@ -30,8 +30,8 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-production"
     api_v1_prefix: str = "/api/v1"
 
-    # Database
-    database_url: str = "postgresql+asyncpg://postgres:password@localhost:5432/trueshift"
+    # Database (local services default)
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/trueshift"
     redis_url: str = "redis://localhost:6379/0"
 
     # Firebase Auth
