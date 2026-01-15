@@ -7,7 +7,7 @@ based on metrics from the V-JEPA vision model.
 
 import logging
 from typing import Dict, Any, Optional
-import google.generativeai as genai
+from google import genai
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -15,11 +15,12 @@ logger = logging.getLogger(__name__)
 class AICoachService:
     def __init__(self):
         if settings.google_api_key:
-            genai.configure(api_key=settings.google_api_key)
-            self.model = genai.GenerativeModel(settings.gemini_model)
+            self.client = genai.Client(api_key=settings.google_api_key)
+            self.model_name = settings.gemini_model
         else:
             logger.warning("Google API Key not found. AI Coach will be disabled.")
-            self.model = None
+            self.client = None
+            self.model_name = None
 
     async def generate_feedback(self, metrics: Dict[str, Any], user_context: Optional[Dict] = None) -> str:
         """
@@ -29,7 +30,7 @@ class AICoachService:
             metrics: Dictionary containing form score, rep count, and specific issues.
             user_context: Optional dictionary with user history/goals.
         """
-        if not self.model:
+        if not self.client:
             return "AI Coach unavailable (API Key missing)."
 
         try:
@@ -56,8 +57,11 @@ class AICoachService:
             - Keep it under 20 words.
             """
             
-            # Generate content
-            response = await self.model.generate_content_async(prompt)
+            # Generate content using new SDK
+            response = await self.client.aio.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
             return response.text.strip()
             
         except Exception as e:

@@ -8,7 +8,8 @@ Following Google ADK patterns - agents are modular, stateless, and context-drive
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 from pydantic import BaseModel
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from app.core.config import settings
 
@@ -86,10 +87,11 @@ class BaseAgent(ABC):
     def _init_client(self) -> None:
         """Initialize the Gemini API client."""
         if settings.google_api_key:
-            genai.configure(api_key=settings.google_api_key)
-            self.model = genai.GenerativeModel(settings.gemini_model)
+            self.client = genai.Client(api_key=settings.google_api_key)
+            self.model_name = settings.gemini_model
         else:
-            self.model = None
+            self.client = None
+            self.model_name = None
 
     def _get_system_prompt(self) -> str:
         """Build the full system prompt."""
@@ -123,7 +125,7 @@ class BaseAgent(ABC):
         """
         Make a call to the Gemini LLM.
         """
-        if self.model is None:
+        if self.client is None:
             # Fallback for development without API key
             return self._dev_fallback(prompt, context)
 
@@ -138,9 +140,10 @@ USER CONTEXT:
 TASK:
 {prompt}
 """
-            response = await self.model.generate_content_async(
-                full_prompt,
-                generation_config=genai.types.GenerationConfig(
+            response = await self.client.aio.models.generate_content(
+                model=self.model_name,
+                contents=full_prompt,
+                config=types.GenerateContentConfig(
                     temperature=temperature,
                     max_output_tokens=1024,
                 ),

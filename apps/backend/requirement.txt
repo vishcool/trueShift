@@ -20,3 +20,4 @@ black>=24.1.0
 ruff>=0.1.14
 mypy>=1.8.0
 aiohttp
+google-genai>=0.1.0
