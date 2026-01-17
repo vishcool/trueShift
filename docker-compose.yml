@@ -34,6 +34,34 @@ services:
       timeout: 5s
       retries: 5
 
+  # Backend API
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    container_name: trueshift-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount source code for hot reloading in development
+      - ./apps/backend:/app
+      # Persist firebase credentials if needed
+      - ./apps/backend/firebase-credentials.json:/app/firebase-credentials.json
+    environment:
+      # Override DB/Redis hosts to match container names
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-trueshift}
+      REDIS_URL: redis://${REDIS_PASSWORD:+:${REDIS_PASSWORD}@}redis:6379/0
+      # Ensure python doesn't buffer output
+      PYTHONUNBUFFERED: 1
+
 
 volumes:
   postgres_data:

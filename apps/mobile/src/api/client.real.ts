@@ -8,8 +8,8 @@ import { UserResponse, ConsentUpdate, EventPayload, UserState, Recommendation, A
 
 // API Configuration
 const API_BASE_URL = __DEV__
-    ? 'http://localhost:8000/api/v1'
-    : 'https://api.trueshift.app/api/v1';
+    ? 'https://administratively-paleoclimatological-trey.ngrok-free.dev/api/v1'
+    : 'https://administratively-paleoclimatological-trey.ngrok-free.dev//api/v1';
 
 const AUTH_TOKEN_KEY = 'auth_token';
 
