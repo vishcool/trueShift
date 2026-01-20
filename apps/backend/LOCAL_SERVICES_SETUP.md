@@ -57,6 +57,8 @@ GEMINI_MODEL=gemini-1.5-pro
 
 ```bash
 cd apps/backend
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirement.txt
 ```
 

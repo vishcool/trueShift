@@ -8,5 +8,5 @@ export * from './types';
 
 // Uncomment the implementation you want to use:
 
-// export { api, authToken } from './client.mock';
-export { api, authToken } from './client.real';
+export { api, authToken } from './client.mock';
+// export { api, authToken } from './client.real';
