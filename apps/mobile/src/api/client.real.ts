@@ -29,10 +29,11 @@ function createApiClient(): AxiosInstance {
     client.interceptors.request.use(
         async (config) => {
             try {
-                const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
-                if (token) {
-                    config.headers.Authorization = `Bearer ${token}`;
-                }
+                config.headers.Authorization = `Bearer test`;
+                // const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+                // if (token) {
+                //     config.headers.Authorization = `Bearer ${token}`;
+                // }
             } catch (error) {
                 console.warn('Failed to get auth token:', error);
             }
@@ -62,9 +63,13 @@ export const apiClient = createApiClient();
 export const api = {
     // Auth
     auth: {
-        register: (displayName?: string) =>
-            apiClient.post<UserResponse>('/auth/register', { display_name: displayName }),
-
+        register: (displayName?: string) => {
+            console.log("displayname")
+            return apiClient.post<UserResponse>('/auth/register', {
+                "display_name": "Test User",
+                "email": "test@example.com"
+            })
+        },
         getMe: () =>
             apiClient.get<UserResponse>('/auth/me'),
 
