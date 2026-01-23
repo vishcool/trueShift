@@ -7,7 +7,9 @@ import * as SecureStore from 'expo-secure-store';
 import { UserResponse, ConsentUpdate, EventPayload, UserState, Recommendation, AICoaching, VisionAnalysisResponse, UserProfileUpdate, WorkoutGenerationRequest, WorkoutPlanResponse } from './types';
 
 // API Configuration
-const API_BASE_URL = "http://localhost:8000/api/v1"
+const API_BASE_URL = __DEV__
+    ? 'http://localhost:8000/api/v1' // Use http://10.0.2.2:8000/api/v1 for Android Emulator
+    : 'https://administratively-paleoclimatological-trey.ngrok-free.dev/api/v1';
 
 const AUTH_TOKEN_KEY = 'auth_token';
 
