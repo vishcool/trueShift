@@ -8,8 +8,8 @@ import { UserResponse, ConsentUpdate, EventPayload, UserState, Recommendation, A
 
 // API Configuration
 const API_BASE_URL = __DEV__
-    ? 'https://administratively-paleoclimatological-trey.ngrok-free.dev/api/v1'
-    : 'https://administratively-paleoclimatological-trey.ngrok-free.dev//api/v1';
+    ? 'http://localhost:8000/api/v1' // Use http://10.0.2.2:8000/api/v1 for Android Emulator
+    : 'https://administratively-paleoclimatological-trey.ngrok-free.dev/api/v1';
 
 const AUTH_TOKEN_KEY = 'auth_token';
 
