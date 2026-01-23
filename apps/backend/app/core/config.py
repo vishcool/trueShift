@@ -5,9 +5,11 @@ Centralized configuration management using Pydantic Settings.
 All configuration is loaded from environment variables.
 """
 
+import json
 from functools import lru_cache
-from typing import List
+from typing import List, Union
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -50,9 +52,8 @@ class Settings(BaseSettings):
     feature_ai_coaching: bool = True
     feature_vision_analysis: bool = False
     feature_background_sync: bool = True
+    bypass_auth: bool = False  # Set to True to bypass authentication in development
 
-    # CORS
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:19006"]
 
     @property
     def is_production(self) -> bool:

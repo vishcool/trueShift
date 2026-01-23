@@ -48,6 +48,14 @@ async def verify_firebase_token(
     Verify Firebase ID token from Authorization header.
     Returns decoded token data on success.
     """
+    # Bypass authentication if flag is set (development only)
+    if settings.bypass_auth:
+        return {
+            "uid": "dev-user-001",
+            "email": "dev@trueshift.local",
+            "dev_mode": True,
+        }
+    
     token = credentials.credentials
 
     try:
