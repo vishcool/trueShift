@@ -54,17 +54,29 @@ async def init_db() -> None:
     """
     global redis_client
 
-    # Initialize Redis
-    redis_client = redis.from_url(
-        settings.redis_url,
-        encoding="utf-8",
-        decode_responses=True,
-    )
+    # Initialize Redis (best-effort)
+    try:
+        redis_client = redis.from_url(
+            settings.redis_url,
+            encoding="utf-8",
+            decode_responses=True,
+        )
+    except Exception as e:
+        # Do not fail startup due to Redis connection issues; log and continue.
+        import logging
+
+        logging.getLogger(__name__).warning("Failed to initialize Redis client: %s", e)
 
     # Create tables (for development - use Alembic in production)
     if settings.is_development:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        except Exception as e:
+            # Log DB initialization failures but allow application to start.
+            import logging
+
+            logging.getLogger(__name__).error("Database initialization failed: %s", e)
 
 
 async def close_db() -> None:

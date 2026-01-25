@@ -9,6 +9,7 @@ import json
 import logging
 import aiohttp
 from typing import Optional, Dict, Any, List
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -16,12 +17,13 @@ class GeminiService:
     """
     Service for interacting with Google Gemini API.
     """
-    BASE_URL = os.getenv("GEMINI_BASE_URL")
-    MODEL = os.getenv("GEMINI_MODEL")
+    BASE_URL = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/models")
+    MODEL = settings.gemini_model
     def __init__(self):
+        # Prefer application Settings (loads .env) but allow explicit env var fallback
         self.api_key = os.getenv("GEMINI_API_KEY")
         if not self.api_key:
-            logger.warning("GEMINI_API_KEY not found in environment variables.")
+            logger.warning("Gemini API key not configured (set GOOGLE_API_KEY or GEMINI_API_KEY)")
 
     async def generate_content(
         self, 
@@ -35,7 +37,7 @@ class GeminiService:
         Returns the parsed JSON response if schema is provided, or raw text.
         """
         if not self.api_key:
-             return {"error": "API Key missing", "content": "Configuration Error: No API Key"}
+            return {"error": "API Key missing", "content": "Configuration Error: No API Key"}
 
         url = f"{self.BASE_URL}/{self.MODEL}:generateContent?key={self.api_key}"
         
