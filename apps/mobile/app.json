@@ -40,6 +40,7 @@
                 "ACCESS_FINE_LOCATION",
                 "ACCESS_BACKGROUND_LOCATION",
                 "CAMERA",
+                "RECORD_AUDIO",
                 "ACTIVITY_RECOGNITION",
                 "RECEIVE_BOOT_COMPLETED",
                 "FOREGROUND_SERVICE"

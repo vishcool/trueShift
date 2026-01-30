@@ -1,33 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { useVideoChunker } from '../hooks/useVideoChunker';
-// import { Ionicons } from '@expo/vector-icons'; // Assuming expo icons avail
 
 export default function VisionRecordingScreen({ navigation }: any) {
-    const [permission, requestPermission] = useCameraPermissions();
+    const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+    const [micPermission, requestMicPermission] = useMicrophonePermissions();
     const { cameraRef, isRecording, startRecording, stopRecording, lastFeedback } = useVideoChunker();
 
     useEffect(() => {
-        if (!permission) {
-            requestPermission();
-        }
-    }, [permission, requestPermission]);
+        if (!cameraPermission) requestCameraPermission();
+        if (!micPermission) requestMicPermission();
+    }, [cameraPermission, micPermission]);
 
-    if (!permission) {
-        // Still loading permissions
+    if (!cameraPermission || !micPermission) {
         return <View style={styles.container} />;
     }
 
-    if (!permission.granted) {
+    if (!cameraPermission.granted || !micPermission.granted) {
         return (
             <View style={styles.container}>
                 <Text style={{ color: 'white', textAlign: 'center', marginTop: 50 }}>
-                    No access to camera
+                    Camera and Audio permissions are required
                 </Text>
-                <TouchableOpacity onPress={requestPermission} style={{ marginTop: 20, padding: 10, backgroundColor: 'white', alignSelf: 'center', borderRadius: 5 }}>
-                    <Text>Grant Permission</Text>
+                <TouchableOpacity onPress={() => { requestCameraPermission(); requestMicPermission(); }} style={{ marginTop: 20, padding: 10, backgroundColor: 'white', alignSelf: 'center', borderRadius: 5 }}>
+                    <Text>Grant Permissions</Text>
                 </TouchableOpacity>
             </View>
         );
@@ -37,47 +35,45 @@ export default function VisionRecordingScreen({ navigation }: any) {
         <View style={styles.container}>
             <CameraView
                 ref={cameraRef}
-                style={styles.camera}
+                style={StyleSheet.absoluteFill}
                 facing="front"
                 mode="video"
-            >
-                <SafeAreaView style={styles.overlay}>
-                    {/* Header */}
-                    <View style={styles.header}>
-                        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
-                            {/* <Ionicons name="close" size={24} color="white" /> */}
-                                <Text>Test</Text>
-                        </TouchableOpacity>
-                         <Text style={styles.headerTitle}>AI Form Coach</Text>
-                    </View>
+            />
+            <SafeAreaView style={styles.overlay} pointerEvents="box-none">
+                {/* Header */}
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
+                        <Text>Close</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>AI Form Coach</Text>
+                </View>
 
-                    {/* Feedback Area */}
-                    <View style={styles.feedbackContainer}>
-                        {lastFeedback ? (
-                            <View style={styles.feedbackBox}>
-                                <Text style={styles.feedbackText}>{lastFeedback}</Text>
-                            </View>
-                        ) : isRecording ? (
-                            <Text style={styles.statusText}>Analyzing...</Text>
-                        ) : (
-                            <Text style={styles.statusText}>Align yourself and press Start</Text>
-                        )}
-                    </View>
+                {/* Feedback Area */}
+                <View style={styles.feedbackContainer}>
+                    {lastFeedback ? (
+                        <View style={styles.feedbackBox}>
+                            <Text style={styles.feedbackText}>{lastFeedback}</Text>
+                        </View>
+                    ) : isRecording ? (
+                        <Text style={styles.statusText}>Analyzing...</Text>
+                    ) : (
+                        <Text style={styles.statusText}>Align yourself and press Start</Text>
+                    )}
+                </View>
 
-                    {/* Controls */}
-                    <View style={styles.controls}>
-                        <TouchableOpacity
-                            style={[
-                                styles.recordButton,
-                                isRecording ? styles.recording : styles.idle
-                            ]}
-                            onPress={isRecording ? stopRecording : startRecording}
-                        >
-                            <View style={styles.recordInner} />
-                        </TouchableOpacity>
-                    </View>
-                </SafeAreaView>
-            </CameraView>
+                {/* Controls */}
+                <View style={styles.controls}>
+                    <TouchableOpacity
+                        style={[
+                            styles.recordButton,
+                            isRecording ? styles.recording : styles.idle
+                        ]}
+                        onPress={isRecording ? stopRecording : startRecording}
+                    >
+                        <View style={styles.recordInner} />
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
         </View>
     );
 }
@@ -91,7 +87,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     overlay: {
-        flex: 1,
+        ...StyleSheet.absoluteFillObject,
         justifyContent: 'space-between',
         padding: 20,
     },
