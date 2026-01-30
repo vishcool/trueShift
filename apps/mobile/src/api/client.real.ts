@@ -7,7 +7,7 @@ import * as SecureStore from 'expo-secure-store';
 import { UserResponse, ConsentUpdate, EventPayload, UserState, Recommendation, AICoaching, VisionAnalysisResponse, UserProfileUpdate, WorkoutGenerationRequest, WorkoutPlanResponse } from './types';
 
 // API Configuration
-const API_BASE_URL = "http://34.47.186.191:8000/api/v1"
+const API_BASE_URL = "http://34.93.143.50:8000/api/v1"
 
 const AUTH_TOKEN_KEY = 'auth_token';
 
@@ -128,6 +128,23 @@ export const api = {
     workout: {
         generate: (data: WorkoutGenerationRequest) =>
             apiClient.post<WorkoutPlanResponse>('/workout/generate', data),
+
+        generateWithVision: (imageFile: any, params?: WorkoutGenerationRequest) => {
+            const formData = new FormData();
+            formData.append('file', {
+                uri: imageFile.uri,
+                name: 'equipment.jpg',
+                type: 'image/jpeg',
+            } as any);
+
+            if (params?.duration_minutes) formData.append('duration_minutes', String(params.duration_minutes));
+            if (params?.fitness_level) formData.append('fitness_level', params.fitness_level);
+            if (params?.goals) formData.append('goals', params.goals);
+
+            return apiClient.post<WorkoutPlanResponse>('/workout/generate-with-vision', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+        },
 
         log: (planId: string, completionData: Record<string, unknown>) =>
             apiClient.post<WorkoutPlanResponse>('/workout/log', { plan_id: planId, completion_data: completionData }),

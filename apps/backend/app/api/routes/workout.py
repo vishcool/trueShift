@@ -7,7 +7,7 @@ Endpoints for generating and tracking workouts.
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -113,6 +113,65 @@ async def generate_workout(
     )
     db.add(plan)
     await db.flush() # Get ID
+
+    return WorkoutPlanResponse(
+        id=plan.id,
+        created_at=plan.created_at,
+        scheduled_date=plan.scheduled_date,
+        status=plan.status,
+        plan_data=plan.plan_data,
+        completion_data=plan.completion_data,
+        feedback_notes=plan.feedback_notes
+    )
+
+@router.post("/generate-with-vision", response_model=WorkoutPlanResponse)
+async def generate_workout_with_vision(
+    file: UploadFile = File(...),
+    duration_minutes: int = Form(45),
+    fitness_level: str = Form("Intermediate"),
+    goals: str = Form("General Fitness"),
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Generate a personalized workout by analyzing equipment from an image.
+    """
+    # Verify user
+    result = await db.execute(select(User).where(User.firebase_uid == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Read image
+    content = await file.read()
+
+    # Context for AI
+    user_context = {
+        "duration_minutes": duration_minutes,
+        "fitness_level": fitness_level,
+        "goals": goals
+    }
+
+    # Call AI Service
+    from app.services.ai_coach_service import ai_coach_service # Lazy import to avoid circular dep if any
+    
+    llm_response = await ai_coach_service.generate_workout_from_image(
+        image_bytes=content,
+        user_context=user_context
+    )
+
+    if "error" in llm_response:
+         raise HTTPException(status_code=500, detail=f"AI Generation failed: {llm_response['error']}")
+
+    # Create WorkoutPlan
+    plan = WorkoutPlan(
+        user_id=user.id,
+        status="generated",
+        plan_data=llm_response,
+        scheduled_date=datetime.utcnow()
+    )
+    db.add(plan)
+    await db.flush()
 
     return WorkoutPlanResponse(
         id=plan.id,

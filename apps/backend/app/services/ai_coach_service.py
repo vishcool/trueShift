@@ -68,4 +68,60 @@ class AICoachService:
             logger.error(f"Failed to generate AI feedback: {e}")
             return "Keep going! You're doing great."
 
+    async def generate_workout_from_image(self, image_bytes: bytes, user_context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generates a workout plan based on an image of available equipment.
+        
+        Args:
+            image_bytes: Raw bytes of the uploaded image.
+            user_context: User profile and goals (Dict).
+        """
+        if not self.client:
+            return {"error": "AI Coach unavailable (API Key missing)."}
+
+        try:
+            from google.genai import types
+            
+            prompt = f"""
+            Act as an elite personal trainer. 
+            Analyze this image to identify the available gym equipment.
+            Based ONLY on the detected equipment (or lack thereof, implying bodyweight), generate a structured workout plan for the user.
+            
+            User Profile:
+            - Fitness Level: {user_context.get('fitness_level', 'Intermediate')}
+            - Duration: {user_context.get('duration_minutes', 45)} minutes
+            - Goal: {user_context.get('goals', 'General Fitness')}
+            
+            Structure the response as a valid JSON object with:
+            {{
+              "overview": "Brief description of the workout intent (e.g., 'Full Body Dumbbell HIIT' or 'Bodyweight Cardio')",
+              "detected_equipment": ["List", "of", "detected", "items"],
+              "exercises": [
+                {{
+                  "name": "Exercise Name",
+                  "sets": 3,
+                  "reps": "10-12",
+                  "rest_seconds": 60,
+                  "notes": "Form cue or tip"
+                }}
+              ]
+            }}
+            Do not include markdown formatting. Return raw JSON.
+            """
+
+            image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
+
+            response = await self.client.aio.models.generate_content(
+                model=self.model_name,
+                contents=[prompt, image_part],
+                config=types.GenerateContentConfig(response_mime_type="application/json")
+            )
+            
+            import json
+            return json.loads(response.text)
+
+        except Exception as e:
+            logger.error(f"Failed to generate workout from image: {e}")
+            return {"error": f"Failed to generate workout: {str(e)}"}
+
 ai_coach_service = AICoachService()

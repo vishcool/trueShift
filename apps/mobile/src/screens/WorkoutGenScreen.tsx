@@ -6,16 +6,24 @@
 
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { api, WorkoutPlanResponse, WorkoutGenerationRequest } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
 
 export function WorkoutGenScreen() {
     const navigation = useNavigation<any>();
+    const route = useRoute<any>();
     const { user } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     const [workoutPlan, setWorkoutPlan] = useState<WorkoutPlanResponse | null>(null);
     const [error, setError] = useState<string | null>(null);
+
+    // Effect to check for passed plan
+    React.useEffect(() => {
+        if (route.params?.generatedPlan) {
+            setWorkoutPlan(route.params.generatedPlan);
+        }
+    }, [route.params?.generatedPlan]);
 
     const generateWorkout = async () => {
         setIsLoading(true);
@@ -52,6 +60,10 @@ export function WorkoutGenScreen() {
         }
     };
 
+    const scanEquipment = () => {
+        navigation.navigate('ScanEquipment');
+    };
+
     return (
         <View style={styles.container}>
             <View style={styles.header}>
@@ -66,6 +78,10 @@ export function WorkoutGenScreen() {
                         </Text>
                         <TouchableOpacity style={styles.generateButton} onPress={generateWorkout}>
                             <Text style={styles.buttonText}>Generate Workout</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={[styles.generateButton, styles.scanButton]} onPress={scanEquipment}>
+                            <Text style={styles.buttonText}>Scan Equipment</Text>
                         </TouchableOpacity>
                     </View>
                 )}
@@ -158,6 +174,10 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         width: '100%',
         alignItems: 'center',
+        marginBottom: 16,
+    },
+    scanButton: {
+        backgroundColor: '#374151',
     },
     buttonText: {
         color: '#FFF',
