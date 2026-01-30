@@ -126,6 +126,9 @@ export const api = {
 
     // Workout
     workout: {
+        record: (data: { exercises: any[], duration_minutes: number, completed_at: string }) =>
+            apiClient.post<WorkoutPlanResponse>('/workout/record', data),
+
         generate: (data: WorkoutGenerationRequest) =>
             apiClient.post<WorkoutPlanResponse>('/workout/generate', data),
 

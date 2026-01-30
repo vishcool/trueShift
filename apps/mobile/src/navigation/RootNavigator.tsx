@@ -17,14 +17,20 @@ import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { WorkoutGenScreen } from '../screens/WorkoutGenScreen';
 import VisionRecordingScreen from '../screens/VisionRecordingScreen';
 import ScanEquipmentScreen from '../screens/ScanEquipmentScreen';
+import ExerciseSelectionScreen from '../screens/ExerciseSelectionScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import ActiveSessionScreen from '../screens/ActiveSessionScreen';
 
 export type RootStackParamList = {
     Login: undefined;
     Onboarding: undefined;
     Home: undefined;
-    Vision: { planId?: string; exercises?: any[] } | undefined;
+    // Vision: { planId?: string; exercises?: any[] } | undefined;
     WorkoutGen: { generatedPlan?: any } | undefined;
     ScanEquipment: undefined;
+    ExerciseSelection: { suggestions: any[]; analysis?: string };
+    Profile: { addedExercises?: any[] } | undefined;
+    ActiveSession: { exercises: any[] };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -62,6 +68,9 @@ export function RootNavigator() {
             <Stack.Screen name="WorkoutGen" component={WorkoutGenScreen} />
             <Stack.Screen name="Vision" component={VisionRecordingScreen} />
             <Stack.Screen name="ScanEquipment" component={ScanEquipmentScreen} />
+            <Stack.Screen name="ExerciseSelection" component={ExerciseSelectionScreen} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
+            <Stack.Screen name="ActiveSession" component={ActiveSessionScreen} />
         </Stack.Navigator>
     );
 }

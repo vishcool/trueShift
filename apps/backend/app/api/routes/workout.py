@@ -17,6 +17,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models.user import User
 from app.models.workout import WorkoutPlan
+from app.models.user_state import UserState, RecoveryStatus
 from app.ai.llm_service import gemini_service
 
 router = APIRouter()
@@ -145,11 +146,45 @@ async def generate_workout_with_vision(
     # Read image
     content = await file.read()
 
+    # 1. Fetch User State (Recovery)
+    state_result = await db.execute(select(UserState).where(UserState.user_id == user.id))
+    user_state = state_result.scalar_one_or_none()
+    
+    recovery_score = 50 # Default
+    if user_state:
+        # Simple mapping: fully_recovered=90, well_rested=75, moderate=50, fatigued=30, exhausted=10
+        status_map = {
+            RecoveryStatus.FULLY_RECOVERED: 90,
+            RecoveryStatus.WELL_RESTED: 75,
+            RecoveryStatus.MODERATE: 50,
+            RecoveryStatus.FATIGUED: 30,
+            RecoveryStatus.EXHAUSTED: 10
+        }
+        recovery_score = status_map.get(user_state.recovery_status, 50)
+
+    # 2. Fetch Recent History (Last 3 workouts)
+    history_result = await db.execute(
+        select(WorkoutPlan)
+        .where(WorkoutPlan.user_id == user.id)
+        .order_by(desc(WorkoutPlan.created_at))
+        .limit(3)
+    )
+    last_workouts = history_result.scalars().all()
+    history_summary = "No recent workouts."
+    if last_workouts:
+        formatted_history = []
+        for w in last_workouts:
+             # Basic summary: "Legs (Completed)" or "Full Body (Generated)"
+             formatted_history.append(f"{w.created_at.strftime('%Y-%m-%d')}: {w.status}")
+        history_summary = "; ".join(formatted_history)
+
     # Context for AI
     user_context = {
         "duration_minutes": duration_minutes,
         "fitness_level": fitness_level,
-        "goals": goals
+        "goals": goals,
+        "recovery_score": recovery_score,
+        "history": history_summary
     }
 
     # Call AI Service
@@ -163,15 +198,54 @@ async def generate_workout_with_vision(
     if "error" in llm_response:
          raise HTTPException(status_code=500, detail=f"AI Generation failed: {llm_response['error']}")
 
+    # Return pure analysis (no DB creation for scans)
+    # We strip the ID/Date/Status fields since it's just a raw analysis response
+    # We can perform a mock simple response or change the return type. 
+    # For now, we return a "Draft" structure.
+    return WorkoutPlanResponse(
+        id="draft-analysis",
+        created_at=datetime.utcnow(),
+        scheduled_date=None,
+        status="draft",
+        plan_data=llm_response,
+        completion_data=None,
+        feedback_notes=None
+    )
+
+class WorkoutRecordRequest(BaseModel):
+    """Request to record a full ad-hoc workout."""
+    exercises: List[Dict[str, Any]]
+    duration_minutes: int
+    notes: Optional[str] = None
+    completed_at: datetime
+
+@router.post("/record", response_model=WorkoutPlanResponse)
+async def record_workout(
+    request: WorkoutRecordRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Record a fully completed ad-hoc workout.
+    """
+    # Verify user
+    result = await db.execute(select(User).where(User.firebase_uid == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
     # Create WorkoutPlan
     plan = WorkoutPlan(
         user_id=user.id,
-        status="generated",
-        plan_data=llm_response,
-        scheduled_date=datetime.utcnow()
+        status="completed",
+        plan_data={"exercises": request.exercises, "overview": "Ad-hoc Session"},
+        completion_data={"exercises": request.exercises}, # For now, target=actual
+        feedback_notes=request.notes,
+        completed_at=request.completed_at
     )
     db.add(plan)
-    await db.flush()
+    await db.commit()
+    await db.refresh(plan)
 
     return WorkoutPlanResponse(
         id=plan.id,

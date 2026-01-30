@@ -82,27 +82,39 @@ class AICoachService:
         try:
             from google.genai import types
             
+            # Extract Context
+            recovery_score = user_context.get('recovery_score', 50) # Default 50 (neutral)
+            history = user_context.get('history', "No recent history")
+            fitness_level = user_context.get('fitness_level', 'Intermediate')
+
             prompt = f"""
             Act as an elite personal trainer. 
             Analyze this image to identify the available gym equipment.
-            Based ONLY on the detected equipment (or lack thereof, implying bodyweight), generate a structured workout plan for the user.
             
-            User Profile:
-            - Fitness Level: {user_context.get('fitness_level', 'Intermediate')}
-            - Duration: {user_context.get('duration_minutes', 45)} minutes
-            - Goal: {user_context.get('goals', 'General Fitness')}
+            User Context:
+            - Fitness Level: {fitness_level}
+            - Recent History: {history}
+            - Recovery Score: {recovery_score}/100 (Where <40 is poor/tired, >70 is fresh/ready)
+            
+            Task:
+            1. Identify the MAIN machine or equipment in the image.
+            2. Suggest 3-5 specific exercises that can be done on this equipment.
+            3. For each exercise, recommend Sets/Reps/Weight based on their RECOVERY score.
+               - If Recovery is LOW (<40): Suggest lower volume (e.g., 2 sets), lighter loads, higher reps (12-15) for blood flow.
+               - If Recovery is HIGH (>70): Suggest higher volume (3-4 sets), heavy loads, lower reps (6-8) for strength/hypertrophy.
+               - If Recovery is NEUTRAL (40-70): Suggest standard volume (3 sets, 8-12 reps).
             
             Structure the response as a valid JSON object with:
             {{
-              "overview": "Brief description of the workout intent (e.g., 'Full Body Dumbbell HIIT' or 'Bodyweight Cardio')",
-              "detected_equipment": ["List", "of", "detected", "items"],
-              "exercises": [
+              "detected_equipment": "Name of equipment",
+              "analysis": "Brief comment on volume choice based on recovery (e.g., 'Recovery is low, keeping volume light.')",
+              "suggested_exercises": [
                 {{
                   "name": "Exercise Name",
                   "sets": 3,
                   "reps": "10-12",
                   "rest_seconds": 60,
-                  "notes": "Form cue or tip"
+                  "notes": "Form cue or volume justification"
                 }}
               ]
             }}
