@@ -151,6 +151,15 @@ export const api = {
 
         log: (planId: string, completionData: Record<string, unknown>) =>
             apiClient.post<WorkoutPlanResponse>('/workout/log', { plan_id: planId, completion_data: completionData }),
+
+        getHistory: () =>
+            apiClient.get<WorkoutPlanResponse[]>('/workout/history'),
+    },
+
+    // Agent
+    agent: {
+        chat: (message: string, context?: any) =>
+            apiClient.post<{ response: string }>('/agent/chat', { message, context }),
     },
 };
 

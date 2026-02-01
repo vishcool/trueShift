@@ -65,23 +65,14 @@ export function HomeScreen() {
                     </Text>
                     <Text style={styles.subtitle}>Ready to crush it today?</Text>
                 </View>
-                <TouchableOpacity
-                    style={styles.actionBtn}
-                    onPress={() => navigation.navigate('WorkoutGen')}
-                >
-                    <Text style={styles.actionIcon}>💪</Text>
-                    <Text style={styles.actionText}>Workout</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={styles.actionBtn}
-                    onPress={() => navigation.navigate('Vision')}
-                >
-                    <Text style={styles.actionIcon}>🎥</Text>
-                    <Text style={styles.actionText}>Record Scope</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
-                    <Text style={styles.logoutText}>Logout</Text>
-                </TouchableOpacity>
+                <View style={styles.headerRight}>
+                    <TouchableOpacity
+                        style={styles.profileBtn}
+                        onPress={() => navigation.navigate('Profile')}
+                    >
+                        <Text style={styles.profileIcon}>👤</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <ScrollView
@@ -175,6 +166,48 @@ const styles = StyleSheet.create({
         color: '#9CA3AF',
         marginTop: 4,
     },
+    headerRight: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    profileBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#1F1F1F',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#333',
+    },
+    profileIcon: {
+        fontSize: 20,
+    },
+    fab: {
+        position: 'absolute',
+        bottom: 20,
+        right: 20,
+        backgroundColor: '#6366F1',
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 30,
+        elevation: 5,
+        shadowColor: '#6366F1',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+    },
+    fabIcon: {
+        fontSize: 20,
+        marginRight: 8,
+    },
+    fabText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
     logoutBtn: {
         padding: 10,
     },
@@ -267,16 +300,27 @@ const styles = StyleSheet.create({
         color: '#6B7280',
         paddingVertical: 20,
     },
-    actionBtn: {
+    actionsGrid: {
+        flexDirection: 'row',
+        gap: 12,
+        marginBottom: 24,
+    },
+    actionCard: {
+        flex: 1,
+        backgroundColor: '#1F1F1F',
+        borderRadius: 16,
+        padding: 16,
         alignItems: 'center',
-        padding: 5,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 8,
     },
-    actionIcon: {
-        fontSize: 24,
-        marginBottom: 2,
+    actionCardIcon: {
+        fontSize: 20,
     },
-    actionText: {
-        fontSize: 10,
-        color: '#A5B4FC',
+    actionCardText: {
+        color: 'white',
+        fontWeight: '600',
+        fontSize: 14,
     },
 });

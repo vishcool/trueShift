@@ -20,12 +20,14 @@ import ScanEquipmentScreen from '../screens/ScanEquipmentScreen';
 import ExerciseSelectionScreen from '../screens/ExerciseSelectionScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ActiveSessionScreen from '../screens/ActiveSessionScreen';
+import ChatScreen from '../screens/ChatScreen';
 
 export type RootStackParamList = {
     Login: undefined;
     Onboarding: undefined;
     Home: undefined;
-    // Vision: { planId?: string; exercises?: any[] } | undefined;
+    Chat: undefined;
+    Vision: { planId?: string; exercises?: any[] } | undefined;
     WorkoutGen: { generatedPlan?: any } | undefined;
     ScanEquipment: undefined;
     ExerciseSelection: { suggestions: any[]; analysis?: string };
@@ -71,6 +73,7 @@ export function RootNavigator() {
             <Stack.Screen name="ExerciseSelection" component={ExerciseSelectionScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="ActiveSession" component={ActiveSessionScreen} />
+            <Stack.Screen name="Chat" component={ChatScreen} />
         </Stack.Navigator>
     );
 }

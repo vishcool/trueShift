@@ -6,7 +6,7 @@ Central router that aggregates all API endpoints.
 
 from fastapi import APIRouter
 
-from app.api.routes import auth, events, state, health, vision, workout
+from app.api.routes import auth, events, state, health, vision, workout, agent
 
 api_router = APIRouter()
 
@@ -50,4 +50,11 @@ api_router.include_router(
     workout.router,
     prefix="/workout",
     tags=["Workout"],
+)
+
+# Agent endpoints
+api_router.include_router(
+    agent.router,
+    prefix="/agent",
+    tags=["Agent"],
 )
