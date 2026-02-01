@@ -1,3 +1,29 @@
 """
 Models package initialization.
+Import all models here to ensure they are registered with SQLAlchemy Base.
 """
+
+# Import all models to register with Base metadata
+from app.models.user import User
+from app.models.user_state import UserState
+from app.models.preferences import UserPreferences
+from app.models.wellness import WellnessData
+from app.models.event import Event
+from app.models.user_behavior import UserBehavior
+from app.models.conversation import ConversationLog
+from app.models.vision_log import VisionLog
+from app.models.workout import WorkoutPlan
+from app.models.user_memory import UserMemory
+
+__all__ = [
+    "User",
+    "UserState",
+    "UserPreferences",
+    "WellnessData",
+    "Event",
+    "UserBehavior",
+    "ConversationLog",
+    "VisionLog",
+    "WorkoutPlan",
+    "UserMemory",
+]
