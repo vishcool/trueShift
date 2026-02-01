@@ -21,7 +21,7 @@ class GeminiService:
     MODEL = settings.gemini_model
     def __init__(self):
         # Prefer application Settings (loads .env) but allow explicit env var fallback
-        self.api_key = os.getenv("GEMINI_API_KEY")
+        self.api_key = settings.google_api_key
         if not self.api_key:
             logger.warning("Gemini API key not configured (set GOOGLE_API_KEY or GEMINI_API_KEY)")
 

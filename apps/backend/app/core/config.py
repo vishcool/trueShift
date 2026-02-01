@@ -42,7 +42,7 @@ class Settings(BaseSettings):
 
     # Google AI / Gemini
     google_api_key: str = ""
-    gemini_model: str = "gemini-1.5-pro"
+    gemini_model: str = "gemini-3-flash-preview"
 
     # Rate Limiting
     rate_limit_per_minute: int = 60
