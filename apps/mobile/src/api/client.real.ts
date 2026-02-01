@@ -7,7 +7,7 @@ import * as SecureStore from 'expo-secure-store';
 import { UserResponse, ConsentUpdate, EventPayload, UserState, Recommendation, AICoaching, VisionAnalysisResponse, UserProfileUpdate, WorkoutGenerationRequest, WorkoutPlanResponse } from './types';
 
 // API Configuration
-const API_BASE_URL = "http://34.93.143.50:8000/api/v1"
+const API_BASE_URL = "http://35.200.162.106:8000/api/v1"
 
 const AUTH_TOKEN_KEY = 'auth_token';
 
