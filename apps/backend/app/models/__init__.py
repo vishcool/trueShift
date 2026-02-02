@@ -9,7 +9,7 @@ from app.models.user_state import UserState
 from app.models.preferences import UserPreferences
 from app.models.wellness import SleepLog, MoodLog, PainLog
 from app.models.event import Event
-from app.models.user_behavior import UserBehavior
+from app.models.user_behavior import BehavioralMarkers, InterventionHistory
 from app.models.conversation import ConversationLog
 from app.models.vision_log import VisionLog
 from app.models.workout import WorkoutPlan
@@ -23,7 +23,8 @@ __all__ = [
     "MoodLog",
     "PainLog",
     "Event",
-    "UserBehavior",
+    "BehavioralMarkers",
+    "InterventionHistory",
     "ConversationLog",
     "VisionLog",
     "WorkoutPlan",
