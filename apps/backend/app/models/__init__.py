@@ -7,7 +7,7 @@ Import all models here to ensure they are registered with SQLAlchemy Base.
 from app.models.user import User
 from app.models.user_state import UserState
 from app.models.preferences import UserPreferences
-from app.models.wellness import WellnessData
+from app.models.wellness import SleepLog, MoodLog, PainLog
 from app.models.event import Event
 from app.models.user_behavior import UserBehavior
 from app.models.conversation import ConversationLog
@@ -19,7 +19,9 @@ __all__ = [
     "User",
     "UserState",
     "UserPreferences",
-    "WellnessData",
+    "SleepLog",
+    "MoodLog",
+    "PainLog",
     "Event",
     "UserBehavior",
     "ConversationLog",
