@@ -16,6 +16,7 @@ import {
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
+    Keyboard,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
@@ -72,6 +73,24 @@ export function HomeScreen() {
     useEffect(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
     }, [messages]);
+
+    const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+
+    useEffect(() => {
+        const keyboardShowListener = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+            () => setKeyboardVisible(true)
+        );
+        const keyboardHideListener = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+            () => setKeyboardVisible(false)
+        );
+
+        return () => {
+            keyboardShowListener.remove();
+            keyboardHideListener.remove();
+        };
+    }, []);
 
     const handleActionPress = (action: string, data?: any) => {
         switch (action) {
@@ -132,12 +151,13 @@ export function HomeScreen() {
         try {
             // Call the workout generation API with correct schema
             const response = await api.workout.generate({
-                equipment: stateData?.physical?.equipment || ['Bodyweight'],
-                duration_minutes: stateData?.physical?.preferred_duration || 30,
-                fitness_level: stateData?.physical?.fitness_level || 'Intermediate',
-                goals: stateData?.physical?.goals?.[0] || 'General Fitness',
+                equipment: ['Bodyweight', 'Dumbbells'],
+                duration_minutes: 30,
+                fitness_level: 'Intermediate',
+                goals: 'General Fitness',
                 target_muscle_group: 'Full Body',
             });
+
 
             const workoutPlan = response.data;
             const exercises = workoutPlan.plan_data?.exercises || [];
@@ -234,7 +254,7 @@ export function HomeScreen() {
     return (
         <KeyboardAvoidingView
             style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : (isKeyboardVisible ? 'padding' : undefined)}
             keyboardVerticalOffset={0}
         >
             {/* Header */}
@@ -262,12 +282,20 @@ export function HomeScreen() {
             {/* Quick Stats Bar */}
             <View style={styles.statsBar}>
                 <View style={styles.statItem}>
-                    <Text style={styles.statValue}>{stateData?.physical?.workouts_this_week || 0}</Text>
+                    <Text style={styles.statValue}>
+                        {typeof stateData?.physical?.workouts_this_week === 'number'
+                            ? stateData.physical.workouts_this_week
+                            : 0}
+                    </Text>
                     <Text style={styles.statLabel}>Workouts</Text>
                 </View>
                 <View style={styles.statDivider} />
                 <View style={styles.statItem}>
-                    <Text style={styles.statValue}>{stateData?.physical?.active_minutes || 0}</Text>
+                    <Text style={styles.statValue}>
+                        {typeof stateData?.physical?.active_minutes === 'number'
+                            ? stateData.physical.active_minutes
+                            : 0}
+                    </Text>
                     <Text style={styles.statLabel}>Active Min</Text>
                 </View>
                 <View style={styles.statDivider} />

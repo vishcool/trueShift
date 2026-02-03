@@ -11,9 +11,12 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import firebase_admin
 from firebase_admin import auth, credentials
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-
+from app.core.database import get_db
+from app.models.user import User
 
 # Initialize Firebase Admin SDK
 _firebase_app: Optional[firebase_admin.App] = None
@@ -94,13 +97,9 @@ async def get_current_user_id(
     return token_data.get("uid", "")
 
 
-# We need to import get_db at the top level for the dependency to work properly
-from app.core.database import get_db as _get_db_for_user
-
-
 async def get_current_user(
     user_id: str = Depends(get_current_user_id),
-    db = Depends(_get_db_for_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get current user object from database.
@@ -109,9 +108,6 @@ async def get_current_user(
     Usage in routes:
         current_user: User = Depends(get_current_user)
     """
-    from sqlalchemy import select
-    from app.models.user import User
-    
     result = await db.execute(
         select(User).where(User.firebase_uid == user_id)
     )
