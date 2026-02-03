@@ -11,7 +11,7 @@ from app.models.wellness import SleepLog, MoodLog, PainLog
 from app.models.event import Event
 from app.models.user_behavior import BehavioralMarkers, InterventionHistory
 from app.models.conversation import ConversationLog
-from app.models.vision_log import VisionLog
+from app.models.vision_log import MovementAnalysis
 from app.models.workout import WorkoutPlan
 from app.models.user_memory import UserMemory
 
@@ -26,7 +26,7 @@ __all__ = [
     "BehavioralMarkers",
     "InterventionHistory",
     "ConversationLog",
-    "VisionLog",
+    "MovementAnalysis",
     "WorkoutPlan",
     "UserMemory",
 ]
