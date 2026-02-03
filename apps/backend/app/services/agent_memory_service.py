@@ -214,10 +214,10 @@ class AgentMemoryService:
             return None
         
         return {
-            "recovery_status": state.physical.get("recovery_status", "unknown"),
-            "steps_today": state.physical.get("steps_today", 0),
-            "active_minutes": state.physical.get("active_minutes", 0),
-            "workouts_this_week": state.physical.get("workouts_this_week", 0),
+            "recovery_status": state.recovery_status,
+            "steps_today": state.steps_today,
+            "active_minutes": state.active_minutes_today,
+            "workouts_this_week": state.workouts_this_week,
         }
 
     @staticmethod
