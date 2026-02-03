@@ -94,6 +94,35 @@ async def get_current_user_id(
     return token_data.get("uid", "")
 
 
+async def get_current_user(
+    user_id: str = Depends(get_current_user_id),
+    db = Depends(lambda: get_db()),
+):
+    """
+    Get current user object from database.
+    This is a dependency that returns the User model instance.
+    
+    Usage in routes:
+        current_user: User = Depends(get_current_user)
+    """
+    from sqlalchemy import select
+    from app.core.database import get_db
+    from app.models.user import User
+    
+    result = await db.execute(
+        select(User).where(User.firebase_uid == user_id)
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return user
+
+
 class ConsentManager:
     """
     Manages user consent for data collection and processing.
