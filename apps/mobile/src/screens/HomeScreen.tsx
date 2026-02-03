@@ -1,145 +1,324 @@
 /**
  * TrueShift - Home Screen
  * 
- * Main dashboard showing user state and recommendations.
+ * Chat-centric dashboard with AI coach for workouts, equipment scanning,
+ * and workout generation.
  */
 
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     ScrollView,
-    RefreshControl,
     TouchableOpacity,
+    TextInput,
+    KeyboardAvoidingView,
+    Platform,
+    ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
-import { offlineCache } from '../services/OfflineCache';
+
+interface Message {
+    id: string;
+    text: string;
+    sender: 'user' | 'agent';
+    timestamp: Date;
+    actions?: ActionButton[];
+}
+
+interface ActionButton {
+    label: string;
+    action: string;
+    data?: any;
+}
 
 export function HomeScreen() {
     const navigation = useNavigation<any>();
-    const { user, logout } = useAuth();
+    const { user } = useAuth();
+    const scrollViewRef = useRef<ScrollView>(null);
+    const messageIdCounter = useRef(1);
 
-    // Fetch user state
-    const {
-        data: stateData,
-        isLoading: stateLoading,
-        refetch: refetchState,
-    } = useQuery({
+    const [messages, setMessages] = useState<Message[]>([
+        {
+            id: 'initial-1',
+            text: `Hey ${user?.display_name || 'there'}! 💪 I'm your AI workout coach. What would you like to do today?`,
+            sender: 'agent',
+            timestamp: new Date(),
+            actions: [
+                { label: '🏋️ Generate Workout', action: 'generate_workout' },
+                { label: '📸 Scan Equipment', action: 'scan_equipment' },
+                { label: '💬 Chat About Fitness', action: 'chat' },
+            ],
+        },
+    ]);
+    const [inputText, setInputText] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    // Fetch user state for context
+    const { data: stateData } = useQuery({
         queryKey: ['userState'],
         queryFn: async () => {
             const response = await api.state.get();
-            await offlineCache.userState.set(response.data);
             return response.data;
         },
         staleTime: 1000 * 60 * 5,
     });
 
-    // Fetch recommendations
-    const {
-        data: recsData,
-        isLoading: recsLoading,
-    } = useQuery({
-        queryKey: ['recommendations'],
-        queryFn: async () => {
-            const response = await api.state.getRecommendations(3);
-            await offlineCache.recommendations.set(response.data);
-            return response.data;
-        },
-        staleTime: 1000 * 60 * 15,
-    });
+    useEffect(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, [messages]);
 
-    const isLoading = stateLoading || recsLoading;
+    const handleActionPress = (action: string, data?: any) => {
+        switch (action) {
+            case 'generate_workout':
+                addUserMessage("Generate a workout for me");
+                handleGenerateWorkout();
+                break;
+            case 'scan_equipment':
+                addUserMessage("I want to scan my equipment");
+                navigation.navigate('ScanEquipment');
+                break;
+            case 'chat':
+                addUserMessage("I want to chat about my fitness");
+                addAgentMessage("Of course! Tell me about your fitness goals, how you're feeling today, or ask me any questions about workouts and nutrition. I'm here to help! 😊");
+                break;
+            case 'view_workout':
+                if (data) {
+                    navigation.navigate('WorkoutGen', { generatedPlan: data });
+                }
+                break;
+            case 'start_workout':
+                if (data?.plan_data?.exercises) {
+                    navigation.navigate('ActiveSession', { exercises: data.plan_data.exercises });
+                } else {
+                    addAgentMessage("Sorry, I couldn't find the workout exercises. Please generate a new workout.");
+                }
+                break;
+            default:
+                break;
+        }
+    };
+
+    const addUserMessage = (text: string) => {
+        messageIdCounter.current += 1;
+        const newMessage: Message = {
+            id: `user-${messageIdCounter.current}-${Date.now()}`,
+            text,
+            sender: 'user',
+            timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, newMessage]);
+    };
+
+    const addAgentMessage = (text: string, actions?: ActionButton[]) => {
+        messageIdCounter.current += 1;
+        const newMessage: Message = {
+            id: `agent-${messageIdCounter.current}-${Date.now()}`,
+            text,
+            sender: 'agent',
+            timestamp: new Date(),
+            actions,
+        };
+        setMessages(prev => [...prev, newMessage]);
+    };
+
+    const handleGenerateWorkout = async () => {
+        setIsLoading(true);
+        try {
+            // Call the workout generation API with correct schema
+            const response = await api.workout.generate({
+                equipment: stateData?.physical?.equipment || ['Bodyweight'],
+                duration_minutes: stateData?.physical?.preferred_duration || 30,
+                fitness_level: stateData?.physical?.fitness_level || 'Intermediate',
+                goals: stateData?.physical?.goals?.[0] || 'General Fitness',
+                target_muscle_group: 'Full Body',
+            });
+
+            const workoutPlan = response.data;
+            const exercises = workoutPlan.plan_data?.exercises || [];
+
+            addAgentMessage(
+                `I've created a ${workoutPlan.plan_data?.overview || 'personalized'} workout for you! It includes ${exercises.length} exercises. Ready to start?`,
+                [
+                    { label: '▶️ Start Workout', action: 'start_workout', data: workoutPlan },
+                    { label: '👀 View Details', action: 'view_workout', data: workoutPlan },
+                    { label: '🔄 Generate New', action: 'generate_workout' },
+                ]
+            );
+        } catch (error: any) {
+            console.error('Workout generation error:', error);
+            addAgentMessage(
+                `Sorry, I couldn't generate a workout right now. ${error.response?.data?.detail || error.message || 'Please try again!'}`
+            );
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSendMessage = async () => {
+        if (!inputText.trim() || isLoading) return;
+
+        const userMessage = inputText.trim();
+        addUserMessage(userMessage);
+        setInputText('');
+        setIsLoading(true);
+
+        try {
+            const response = await api.agent.chat(userMessage, {
+                current_condition: stateData?.physical,
+            });
+
+            const agentResponse = response.data.response || "I'm thinking about your request...";
+
+            // Check if the response suggests a workout
+            if (agentResponse.toLowerCase().includes('workout') ||
+                userMessage.toLowerCase().includes('workout')) {
+                addAgentMessage(agentResponse, [
+                    { label: '🏋️ Generate Workout', action: 'generate_workout' },
+                ]);
+            } else {
+                addAgentMessage(agentResponse);
+            }
+        } catch (error) {
+            addAgentMessage("Sorry, I'm having trouble connecting right now. Please try again!");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const renderMessage = (message: Message) => {
+        const isUser = message.sender === 'user';
+
+        return (
+            <View
+                key={message.id}
+                style={[
+                    styles.messageContainer,
+                    isUser ? styles.userMessageContainer : styles.agentMessageContainer
+                ]}
+            >
+                <View style={[
+                    styles.messageBubble,
+                    isUser ? styles.userBubble : styles.agentBubble
+                ]}>
+                    <Text style={[
+                        styles.messageText,
+                        isUser ? styles.userText : styles.agentText
+                    ]}>
+                        {message.text}
+                    </Text>
+                </View>
+
+                {message.actions && (
+                    <View style={styles.actionsContainer}>
+                        {message.actions.map((action, index) => (
+                            <TouchableOpacity
+                                key={index}
+                                style={styles.actionButton}
+                                onPress={() => handleActionPress(action.action, action.data)}
+                            >
+                                <Text style={styles.actionButtonText}>{action.label}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
+            </View>
+        );
+    };
 
     return (
-        <View style={styles.container}>
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={0}
+        >
             {/* Header */}
             <View style={styles.header}>
                 <View>
-                    <Text style={styles.greeting}>
-                        Hey, {user?.display_name || 'Athlete'}
-                    </Text>
-                    <Text style={styles.subtitle}>Ready to crush it today?</Text>
+                    <Text style={styles.greeting}>AI Coach</Text>
+                    <Text style={styles.subtitle}>Your personal fitness assistant</Text>
                 </View>
                 <View style={styles.headerRight}>
                     <TouchableOpacity
-                        style={styles.profileBtn}
+                        style={styles.iconBtn}
+                        onPress={() => navigation.navigate('ScanEquipment')}
+                    >
+                        <Text style={styles.iconText}>📸</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.iconBtn}
                         onPress={() => navigation.navigate('Profile')}
                     >
-                        <Text style={styles.profileIcon}>👤</Text>
+                        <Text style={styles.iconText}>👤</Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
+            {/* Quick Stats Bar */}
+            <View style={styles.statsBar}>
+                <View style={styles.statItem}>
+                    <Text style={styles.statValue}>{stateData?.physical?.workouts_this_week || 0}</Text>
+                    <Text style={styles.statLabel}>Workouts</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                    <Text style={styles.statValue}>{stateData?.physical?.active_minutes || 0}</Text>
+                    <Text style={styles.statLabel}>Active Min</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                    <Text style={[
+                        styles.statValue,
+                        { color: stateData?.physical?.recovery_status === 'well_rested' ? '#10B981' : '#F59E0B' }
+                    ]}>
+                        {String(stateData?.physical?.recovery_status || 'Ready').replace(/_/g, ' ')}
+                    </Text>
+                    <Text style={styles.statLabel}>Status</Text>
+                </View>
+            </View>
+
+            {/* Chat Messages */}
             <ScrollView
-                style={styles.content}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={isLoading}
-                        onRefresh={() => refetchState()}
-                        tintColor="#6366F1"
-                    />
-                }
+                ref={scrollViewRef}
+                style={styles.chatContainer}
+                contentContainerStyle={styles.chatContent}
             >
-                {/* Status Cards */}
-                <View style={styles.statusGrid}>
-                    <View style={styles.statusCard}>
-                        <Text style={styles.statusValue}>
-                            {(stateData?.physical?.steps_today as number) || 0}
-                        </Text>
-                        <Text style={styles.statusLabel}>Steps</Text>
-                    </View>
-                    <View style={styles.statusCard}>
-                        <Text style={styles.statusValue}>
-                            {(stateData?.physical?.active_minutes as number) || 0}
-                        </Text>
-                        <Text style={styles.statusLabel}>Active Min</Text>
-                    </View>
-                    <View style={styles.statusCard}>
-                        <Text style={styles.statusValue}>
-                            {(stateData?.physical?.workouts_this_week as number) || 0}
-                        </Text>
-                        <Text style={styles.statusLabel}>Workouts</Text>
-                    </View>
-                </View>
+                {messages.map(renderMessage)}
 
-                {/* Recovery Status */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Recovery Status</Text>
-                    <View style={styles.recoveryCard}>
-                        <Text style={styles.recoveryStatus}>
-                            {String(stateData?.physical?.recovery_status || 'Unknown').replace(/_/g, ' ')}
-                        </Text>
-                        <Text style={styles.recoverySubtext}>
-                            Based on sleep and activity data
-                        </Text>
+                {isLoading && (
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator color="#6366F1" size="small" />
+                        <Text style={styles.loadingText}>Thinking...</Text>
                     </View>
-                </View>
-
-                {/* Recommendations */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>For You</Text>
-                    {recsData?.recommendations?.map((rec: any, index: number) => (
-                        <TouchableOpacity key={index} style={styles.recommendationCard}>
-                            <Text style={styles.recTitle}>{rec.title}</Text>
-                            <Text style={styles.recDescription}>{rec.description}</Text>
-                            <View style={styles.recBadge}>
-                                <Text style={styles.recBadgeText}>{rec.type}</Text>
-                            </View>
-                        </TouchableOpacity>
-                    ))}
-                    {(!recsData?.recommendations || recsData.recommendations.length === 0) && (
-                        <Text style={styles.emptyText}>
-                            No recommendations yet. Keep moving!
-                        </Text>
-                    )}
-                </View>
+                )}
             </ScrollView>
-        </View>
+
+            {/* Input Area */}
+            <View style={styles.inputContainer}>
+                <TextInput
+                    style={styles.textInput}
+                    placeholder="Ask me anything about fitness..."
+                    placeholderTextColor="#6B7280"
+                    value={inputText}
+                    onChangeText={setInputText}
+                    onSubmitEditing={handleSendMessage}
+                    returnKeyType="send"
+                    multiline
+                />
+                <TouchableOpacity
+                    style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+                    onPress={handleSendMessage}
+                    disabled={!inputText.trim() || isLoading}
+                >
+                    <Text style={styles.sendButtonText}>→</Text>
+                </TouchableOpacity>
+            </View>
+        </KeyboardAvoidingView>
     );
 }
 
@@ -154,173 +333,169 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 20,
         paddingTop: 60,
-        paddingBottom: 20,
+        paddingBottom: 16,
     },
     greeting: {
-        fontSize: 28,
+        fontSize: 24,
         fontWeight: 'bold',
         color: '#FFFFFF',
     },
     subtitle: {
-        fontSize: 16,
+        fontSize: 14,
         color: '#9CA3AF',
-        marginTop: 4,
+        marginTop: 2,
     },
     headerRight: {
         flexDirection: 'row',
         gap: 12,
     },
-    profileBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+    iconBtn: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         backgroundColor: '#1F1F1F',
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
         borderColor: '#333',
     },
-    profileIcon: {
+    iconText: {
         fontSize: 20,
     },
-    fab: {
-        position: 'absolute',
-        bottom: 20,
-        right: 20,
-        backgroundColor: '#6366F1',
+    statsBar: {
         flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-        borderRadius: 30,
-        elevation: 5,
-        shadowColor: '#6366F1',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-    },
-    fabIcon: {
-        fontSize: 20,
-        marginRight: 8,
-    },
-    fabText: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
-    logoutBtn: {
-        padding: 10,
-    },
-    logoutText: {
-        color: '#6366F1',
-        fontSize: 14,
-    },
-    content: {
-        flex: 1,
-        paddingHorizontal: 20,
-    },
-    statusGrid: {
-        flexDirection: 'row',
-        gap: 12,
-        marginBottom: 24,
-    },
-    statusCard: {
-        flex: 1,
+        marginHorizontal: 20,
         backgroundColor: '#1F1F1F',
         borderRadius: 16,
         padding: 16,
+        marginBottom: 16,
+    },
+    statItem: {
+        flex: 1,
         alignItems: 'center',
     },
-    statusValue: {
-        fontSize: 24,
+    statValue: {
+        fontSize: 16,
         fontWeight: 'bold',
         color: '#FFFFFF',
-    },
-    statusLabel: {
-        fontSize: 12,
-        color: '#9CA3AF',
-        marginTop: 4,
-    },
-    section: {
-        marginBottom: 24,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#FFFFFF',
-        marginBottom: 12,
-    },
-    recoveryCard: {
-        backgroundColor: '#1F1F1F',
-        borderRadius: 16,
-        padding: 20,
-    },
-    recoveryStatus: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#10B981',
         textTransform: 'capitalize',
     },
-    recoverySubtext: {
-        fontSize: 14,
+    statLabel: {
+        fontSize: 11,
         color: '#9CA3AF',
-        marginTop: 4,
+        marginTop: 2,
     },
-    recommendationCard: {
-        backgroundColor: '#1F1F1F',
-        borderRadius: 16,
-        padding: 20,
-        marginBottom: 12,
+    statDivider: {
+        width: 1,
+        backgroundColor: '#333',
     },
-    recTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#FFFFFF',
+    chatContainer: {
+        flex: 1,
     },
-    recDescription: {
-        fontSize: 14,
-        color: '#9CA3AF',
-        marginTop: 8,
+    chatContent: {
+        paddingHorizontal: 20,
+        paddingBottom: 20,
     },
-    recBadge: {
+    messageContainer: {
+        marginBottom: 16,
+    },
+    userMessageContainer: {
+        alignItems: 'flex-end',
+    },
+    agentMessageContainer: {
+        alignItems: 'flex-start',
+    },
+    messageBubble: {
+        maxWidth: '85%',
+        padding: 14,
+        borderRadius: 20,
+    },
+    userBubble: {
         backgroundColor: '#6366F1',
-        borderRadius: 8,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        alignSelf: 'flex-start',
-        marginTop: 12,
+        borderBottomRightRadius: 4,
     },
-    recBadgeText: {
-        fontSize: 12,
+    agentBubble: {
+        backgroundColor: '#1F1F1F',
+        borderBottomLeftRadius: 4,
+    },
+    messageText: {
+        fontSize: 15,
+        lineHeight: 22,
+    },
+    userText: {
         color: '#FFFFFF',
-        textTransform: 'uppercase',
     },
-    emptyText: {
-        fontSize: 14,
-        color: '#6B7280',
-        paddingVertical: 20,
+    agentText: {
+        color: '#E5E7EB',
     },
-    actionsGrid: {
+    actionsContainer: {
         flexDirection: 'row',
-        gap: 12,
-        marginBottom: 24,
+        flexWrap: 'wrap',
+        gap: 8,
+        marginTop: 10,
     },
-    actionCard: {
+    actionButton: {
+        backgroundColor: '#2D2D3A',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#6366F1',
+    },
+    actionButtonText: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    loadingContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingVertical: 10,
+    },
+    loadingText: {
+        color: '#9CA3AF',
+        fontSize: 14,
+    },
+    inputContainer: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        backgroundColor: '#0A0A0A',
+        borderTopWidth: 1,
+        borderTopColor: '#1F1F1F',
+    },
+    textInput: {
         flex: 1,
         backgroundColor: '#1F1F1F',
-        borderRadius: 16,
-        padding: 16,
-        alignItems: 'center',
-        flexDirection: 'row',
+        borderRadius: 24,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        paddingRight: 48,
+        color: '#FFFFFF',
+        fontSize: 15,
+        maxHeight: 100,
+        borderWidth: 1,
+        borderColor: '#333',
+    },
+    sendButton: {
+        position: 'absolute',
+        right: 28,
+        bottom: 24,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#6366F1',
         justifyContent: 'center',
-        gap: 8,
+        alignItems: 'center',
     },
-    actionCardIcon: {
-        fontSize: 20,
+    sendButtonDisabled: {
+        backgroundColor: '#4B5563',
     },
-    actionCardText: {
-        color: 'white',
-        fontWeight: '600',
-        fontSize: 14,
+    sendButtonText: {
+        color: '#FFFFFF',
+        fontSize: 18,
+        fontWeight: 'bold',
     },
 });

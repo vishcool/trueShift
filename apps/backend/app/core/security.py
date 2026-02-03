@@ -94,9 +94,13 @@ async def get_current_user_id(
     return token_data.get("uid", "")
 
 
+# We need to import get_db at the top level for the dependency to work properly
+from app.core.database import get_db as _get_db_for_user
+
+
 async def get_current_user(
     user_id: str = Depends(get_current_user_id),
-    db = Depends(lambda: get_db()),
+    db = Depends(_get_db_for_user),
 ):
     """
     Get current user object from database.
@@ -106,7 +110,6 @@ async def get_current_user(
         current_user: User = Depends(get_current_user)
     """
     from sqlalchemy import select
-    from app.core.database import get_db
     from app.models.user import User
     
     result = await db.execute(

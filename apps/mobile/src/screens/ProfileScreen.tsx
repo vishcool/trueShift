@@ -7,6 +7,14 @@ export default function ProfileScreen() {
     const navigation = useNavigation<any>();
     const { user, logout } = useAuth();
 
+    const handleGoBack = () => {
+        if (navigation.canGoBack()) {
+            navigation.goBack();
+        } else {
+            navigation.navigate('Home');
+        }
+    };
+
     const handleLogout = () => {
         Alert.alert(
             "Logout",
@@ -21,7 +29,7 @@ export default function ProfileScreen() {
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
                     <Text style={styles.backButtonText}>← Back</Text>
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>My Profile</Text>
