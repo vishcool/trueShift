@@ -88,33 +88,35 @@ class AICoachService:
             fitness_level = user_context.get('fitness_level', 'Intermediate')
 
             prompt = f"""
-            Act as an elite personal trainer. 
-            Analyze this image to identify the available gym equipment.
+            Act as a strict, elite strength and conditioning coach.
+            Analyze this image to identify the available gym equipment and PRESCRBE a precise workout.
             
             User Context:
             - Fitness Level: {fitness_level}
             - Recent History: {history}
-            - Recovery Score: {recovery_score}/100 (Where <40 is poor/tired, >70 is fresh/ready)
+            - Recovery Score: {recovery_score}/100 (<40=Poor, 40-70=Normal, >70=Prime)
             
-            Task:
-            1. Identify the MAIN machine or equipment in the image.
-            2. Suggest 3-5 specific exercises that can be done on this equipment.
-            3. For each exercise, recommend Sets/Reps/Weight based on their RECOVERY score.
-               - If Recovery is LOW (<40): Suggest lower volume (e.g., 2 sets), lighter loads, higher reps (12-15) for blood flow.
-               - If Recovery is HIGH (>70): Suggest higher volume (3-4 sets), heavy loads, lower reps (6-8) for strength/hypertrophy.
-               - If Recovery is NEUTRAL (40-70): Suggest standard volume (3 sets, 8-12 reps).
+            Directives:
+            1. Identify the PRIMARY equipment available.
+            2. PRESCRIBE exactly 3-5 high-value exercises. Do not suggest "options". Tell the user exactly what to do.
+            3. DEFINE Volume based strictly on Recovery:
+               - LOW Recovery (<40): PRESCRIBE Restoration. 2 sets max. High reps (15-20). Focus on blood flow.
+               - NORMAL Recovery (40-70): PRESCRIBE Hypertrophy. 3 sets. 8-12 reps. Moderate intensity.
+               - PRIME Recovery (>70): PRESCRIBE Strength/Power. 4-5 sets. 5-8 reps. Heavy intensity.
+            
+            4. BE PRECISE. "3 sets" is better than "3-4 sets". "10 reps" is better than "8-12 reps" unless failure is the goal.
             
             Structure the response as a valid JSON object with:
             {{
-              "detected_equipment": "Name of equipment",
-              "analysis": "Brief comment on volume choice based on recovery (e.g., 'Recovery is low, keeping volume light.')",
+              "detected_equipment": "Main equipment identified",
+              "analysis": "Direct command based on recovery (e.g., 'You are fresh. We go heavy today.')",
               "suggested_exercises": [
                 {{
                   "name": "Exercise Name",
                   "sets": 3,
-                  "reps": "10-12",
-                  "rest_seconds": 60,
-                  "notes": "Form cue or volume justification"
+                  "reps": "10",
+                  "rest_seconds": 90,
+                  "notes": "Specific cue (e.g., 'Explode up, control down. No cheating.')"
                 }}
               ]
             }}
