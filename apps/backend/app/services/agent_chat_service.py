@@ -16,6 +16,9 @@ from app.services.agent_memory_service import agent_memory_service
 logger = logging.getLogger(__name__)
 
 
+from app.services.workout_service import workout_service
+from app.schemas.workout import WorkoutGenerationRequest
+
 class AgentChatService:
     """
     Service for conversational AI coaching with user memory.
@@ -68,28 +71,29 @@ CURRENT CONDITION:
 {workout_summary}
 
 YOUR CORE DIRECTIVES:
-1. TAKE COMMAND: Do not be passive. Do not ask open-ended questions like "What do you want to do?". Instead, analyze the user's state and GIVE INSTRUCTIONS.
-2. VERIFY READINESS: If the user has already worked out recently (check 'last_workout'), immediately ASK about their physical state (soreness, energy) BEFORE prescribing anything.
-3. BE PRECISE: Give exact numbers, sets, and reps. Do not be vague.
-4. DRIVE BEST EFFORT: Your goal is to maximize the user's results. Push them to their best effort while respecting safety.
-5. NO DECISION PARALYSIS: Do not offer too many choices. Make the BEST decision for the user and tell them to do it.
+1. TAKE COMMAND: Analyze the user's state and GIVE INSTRUCTIONS.
+2. DETECT WORKOUT INTENT: If the user indicates they want to workout (e.g., "Give me a plan", "I want to train legs"), you MUST trigger the 'generate_workout' action.
+3. EXTRACT PARAMETERS: If generating a workout, infer target muscle, duration, etc., from context or defaults.
 
-INTERACTION PROTOCOL:
-- If User says "I want to workout":
-  CHECK: Did they workout today/yesterday?
-  IF YES: Command: "Assess your recovery. On a scale of 1-10, how sore are you?"
-  IF NO: Command: "We are training [Target Muscle] today. Are you ready?"
-
-- If User reports being tired/sore:
-  ACTION: Adjust plan immediately. Command: "Understood. We are switching to a recovery session. Stretch and light mobility only."
+RESPONSE FORMAT:
+You MUST respond in strict JSON format:
+{{
+  "response": "Your conversational response to the user (e.g., 'Understood. Generating a high-intensity leg session for you now.')",
+  "action": "none" | "generate_workout",
+  "workout_params": {{
+      "target_muscle_group": "Full Body" | "Upper Body" | "Lower Body" | "Push" | "Pull" | "Legs" | "Chest" | "Back" | "Arms" | "Shoulders",
+      "duration_minutes": 45,
+      "fitness_level": "Intermediate", 
+      "goals": "Strength" | "Hypertrophy" | "Endurance"
+  }} (Include ONLY if action is 'generate_workout')
+}}
 
 TONE:
 - Authoritative but supportive.
 - Concise.
 - Action-oriented.
-- "Coach" persona - firm but fair.
 
-Respond directly and efficiently."""
+Respond directly in JSON."""
 
         return system_prompt
 
@@ -123,10 +127,10 @@ Respond directly and efficiently."""
         
         # Build full prompt
         prompt = f"""{history_text}{plan_context}
-
-User: {current_message}
-
-Coach:"""
+        
+        User: {current_message}
+        
+        Coach (JSON):"""
         
         return prompt
 
@@ -138,38 +142,29 @@ Coach:"""
         context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Main chat function with user memory.
-        
-        Args:
-            db: Database session
-            user_id: User ID
-            message: User's message
-            context: Additional context (current_plan, equipment, etc.)
-        
-        Returns:
-            {
-                "response": str,
-                "updated_context": dict (optional)
-            }
+        Main chat function with user memory and action handling.
         """
         try:
+            # Get user user object (needed for workout service)
+            from sqlalchemy import select
+            from app.models.user import User
+            user_result = await db.execute(select(User).where(User.firebase_uid == user_id))
+            user = user_result.scalar_one_or_none()
+            if not user:
+                 raise Exception("User not found")
+
             # Get user memory
             user_memory = await agent_memory_service.get_user_memory(db, user_id)
             
-            # Build system prompt
+            # Build prompts
             system_prompt = AgentChatService.build_system_prompt(user_memory)
-            
-            # Build conversation prompt
             conversation_prompt = AgentChatService.build_conversation_context(
                 user_memory, message, context
             )
             
             # Save user message
             await agent_memory_service.save_conversation(
-                db=db,
-                user_id=user_id,
-                role="user",
-                content=message,
+                db=db, user_id=user_id, role="user", content=message,
                 session_id=context.get("session_id") if context else None
             )
             
@@ -178,39 +173,70 @@ Coach:"""
             gemini_response = await gemini_service.generate_content(
                 prompt=conversation_prompt,
                 system_instruction=system_prompt,
-                temperature=0.7
+                temperature=0.7,
+                response_schema={"type": "object"} # Enforce JSON
             )
             
-            # Extract response
-            if "error" in gemini_response:
-                logger.error(f"Gemini error: {gemini_response}")
-                response_text = "I'm having trouble right now. Please try again in a moment."
-            else:
-                response_text = gemini_response.get("content", "I'm not sure how to respond to that.")
+            response_content = gemini_response.get("content", "{}")
+            action_data = {}
+            response_text = "I'm having trouble processing that."
             
-            # Save agent response
+            try:
+                # Parse JSON response
+                if isinstance(response_content, str):
+                    parsed_response = json.loads(response_content)
+                else:
+                    parsed_response = response_content # Already dict if using smart parser
+                
+                response_text = parsed_response.get("response", response_text)
+                action = parsed_response.get("action", "none")
+                
+                # Handle Action
+                if action == "generate_workout":
+                    params = parsed_response.get("workout_params", {})
+                    # Add defaults from user profile if missing
+                    fitness_profile = user_memory.get("fitness_profile", {})
+                    request = WorkoutGenerationRequest(
+                        target_muscle_group=params.get("target_muscle_group", "Full Body"),
+                        duration_minutes=params.get("duration_minutes", fitness_profile.get("preferred_duration", 45)),
+                        fitness_level=params.get("fitness_level", fitness_profile.get("level", "Intermediate")),
+                        goals=params.get("goals", "General Fitness"),
+                        equipment=fitness_profile.get("equipment", [])
+                    )
+                    
+                    # Generate Workout
+                    plan = await workout_service.generate_workout(db, user, request)
+                    
+                    action_data = {
+                        "action": "view_workout",
+                        "data": {
+                            "id": plan.id,
+                            "overview": plan.plan_data.get("overview", "Generated Workout"),
+                            "exercises": plan.plan_data.get("exercises", [])
+                        }
+                    }
+                    
+                    # Update response text if needed (optional)
+                    # response_text += f" I've created a {request.target_muscle_group} plan for you."
+
+            except json.JSONDecodeError:
+                logger.error("Failed to parse agent JSON response")
+                response_text = str(response_content) # Fallback to raw text
+            except Exception as e:
+                logger.error(f"Action processing error: {e}")
+                response_text += " (I tried to generate a workout but encountered an error.)"
+
+            # Save agent response (Clean text only)
             await agent_memory_service.save_conversation(
-                db=db,
-                user_id=user_id,
-                role="model",
-                content=response_text,
+                db=db, user_id=user_id, role="model", content=response_text,
                 agent_name="WorkoutAgent",
                 session_id=context.get("session_id") if context else None
             )
             
-            # Update conversation context
-            if context:
-                await agent_memory_service.update_conversation_context(
-                    db=db,
-                    user_id=user_id,
-                    context_updates={
-                        "current_plan_id": context.get("current_plan_id"),
-                        "session_id": context.get("session_id"),
-                    }
-                )
-            
             return {
                 "response": response_text,
+                "action": action_data.get("action"), # To frontend
+                "data": action_data.get("data"),     # To frontend
                 "conversation_id": user_memory.get("conversation_context", {}).get("session_id")
             }
             

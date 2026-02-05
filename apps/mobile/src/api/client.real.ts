@@ -159,7 +159,7 @@ export const api = {
     // Agent
     agent: {
         chat: (message: string, context?: any) =>
-            apiClient.post<{ response: string }>('/agent/chat', { message, context }),
+            apiClient.post<{ response: string; action?: string; data?: any }>('/agent/chat', { message, context }),
     },
 };
 

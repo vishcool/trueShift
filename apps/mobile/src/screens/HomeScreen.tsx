@@ -193,17 +193,23 @@ export function HomeScreen() {
                 current_condition: stateData?.physical,
             });
 
-            const agentResponse = response.data.response || "I'm thinking about your request...";
+            const agentResponse = response.data.response;
+            let actions: ActionButton[] | undefined;
 
-            // Check if the response suggests a workout
-            if (agentResponse.toLowerCase().includes('workout') ||
-                userMessage.toLowerCase().includes('workout')) {
-                addAgentMessage(agentResponse, [
+            if (response.data.action === 'view_workout') {
+                actions = [{
+                    label: '🏋️ View Workout Plan',
+                    action: 'view_workout',
+                    data: response.data.data
+                }];
+            } else if (userMessage.toLowerCase().includes('workout') || agentResponse.toLowerCase().includes('workout')) {
+                // Fallback suggestion
+                actions = [
                     { label: '🏋️ Generate Workout', action: 'generate_workout' },
-                ]);
-            } else {
-                addAgentMessage(agentResponse);
+                ];
             }
+
+            addAgentMessage(agentResponse, actions);
         } catch (error) {
             addAgentMessage("Sorry, I'm having trouble connecting right now. Please try again!");
         } finally {
