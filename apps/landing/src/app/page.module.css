@@ -7,9 +7,8 @@
 /* Sections */
 .section {
   min-height: 100vh;
-  padding: 4rem 2rem;
+  padding: 6rem 2rem;
   display: flex;
-  flex-direction: column;
   justify-content: center;
   align-items: center;
   position: relative;
@@ -18,8 +17,14 @@
 
 .hero {
   min-height: 100vh;
+  padding: 6rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  background: radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 50%);
+  background: radial-gradient(circle at 50% 50%,
+      rgba(99, 102, 241, 0.15) 0%,
+      transparent 50%);
 }
 
 .title {
@@ -46,8 +51,25 @@
   max-width: 1200px;
   width: 100%;
   align-items: center;
-  margin: 4rem 0;
+  margin: 0;
 }
+
+.reverse {
+  direction: ltr;
+}
+
+.reverse {
+  grid-auto-flow: dense;
+}
+
+.reverse> :first-child {
+  order: 2;
+}
+
+.reverse> :last-child {
+  order: 1;
+}
+
 
 .featureText {
   padding: 2rem;
@@ -88,6 +110,7 @@
   font-size: 1.1rem;
   transition: transform 0.2s, box-shadow 0.2s;
   display: inline-block;
+  cursor: pointer;
 }
 
 .ctaButton:hover {
@@ -95,16 +118,28 @@
   box-shadow: 0 10px 25px rgba(255, 255, 255, 0.2);
 }
 
+.ctaButton:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
 /* Footer */
 .footer {
-  padding: 4rem 2rem;
-  border-top: 1px solid #333;
+  padding: 6rem 2rem;
   text-align: center;
   color: #666;
+  border-top: 1px solid #333;
 }
 
 /* Mobile */
 @media (max-width: 768px) {
+
+  .section,
+  .hero {
+    min-height: auto;
+    padding: 4rem 1.5rem;
+  }
+
   .title {
     font-size: 2.5rem;
   }
@@ -116,5 +151,10 @@
 
   .featureVisual {
     height: 300px;
+  }
+
+  .subtitle {
+    font-size: 1.2rem;
+    padding: 0 1rem;
   }
 }

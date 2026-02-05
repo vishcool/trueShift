@@ -11,7 +11,8 @@ export default function Home() {
             <span className="text-gradient">TrueShift AI</span>
           </h1>
           <p className={styles.subtitle}>
-            The first workout coach that sees what you see. Scan equipment, get personalized plans, and track your recovery.
+            The workout coach that sees what you see.<br />
+            Scan gym equipment. Train smarter. Recover better.
           </p>
           <a href="#download" className={styles.ctaButton}>
             Get Early Access
@@ -19,14 +20,37 @@ export default function Home() {
         </div>
       </section>
 
+      {/* TrueShift vision and mission */}
+      <section className={styles.section}>
+        <div style={{ maxWidth: "800px", textAlign: "center" }}>
+          <h2 className={styles.featureTitle}>Why TrueShift Exists</h2>
+
+          <p style={{
+            fontSize: "1.4rem",
+            fontWeight: 600,
+            margin: "2rem 0 1rem"
+          }}>
+            To make intelligent, personalized training accessible to everyone.
+          </p>
+
+          <p className={styles.featureDesc}>
+            TrueShift uses AI and computer vision to understand your workout environment,
+            adapt training to your recovery, and help you progress safely and sustainably.
+          </p>
+        </div>
+      </section>
+
       {/* Vision Feature */}
       <section className={styles.section}>
         <div className={styles.featureRow}>
           <div className={styles.featureText}>
-            <h2 className={styles.featureTitle}>Computer Vision</h2>
+            <h2 className={styles.featureTitle}>
+              See Your Gym Smarter
+            </h2>
             <p className={styles.featureDesc}>
-              Point your camera at any gym machine. TrueShift identifies it instantly and suggests optimal exercises based on your body's recovery state.
+              Point your camera at any gym machine. TrueShift recognizes it instantly and recommends exercises based on your current recovery state.
             </p>
+
           </div>
           <div className={`${styles.featureVisual} glass-panel animate-float`}>
             {/* Placeholder for scanning demo */}
@@ -40,8 +64,8 @@ export default function Home() {
 
       {/* AI Plans Feature */}
       <section className={styles.section}>
-        <div className={styles.featureRow} style={{ direction: 'rtl' }}>
-          <div className={styles.featureText} style={{ direction: 'ltr' }}>
+        <div className={`${styles.featureRow} ${styles.reverse}`}>
+          <div className={`${styles.featureText} ${styles.reverse}`}>
             <h2 className={styles.featureTitle}>
               <span className="text-gradient-primary">Dynamic Recovery</span>
             </h2>
