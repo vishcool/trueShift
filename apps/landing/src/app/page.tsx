@@ -88,7 +88,7 @@ export default function Home() {
       {/* Download / Footer */}
       <footer id="download" className={styles.footer}>
         <h3 className={styles.featureTitle} style={{ fontSize: '2rem', marginBottom: '2rem' }}>
-          Ready to Shift?
+          Ready to Shift ?
         </h3>
         <a href="#" className={styles.ctaButton} style={{ background: '#333', color: '#fff', border: '1px solid #444' }}>
           Download APK (Beta)
