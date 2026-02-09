@@ -93,6 +93,9 @@ export default function Home() {
         <a href="#" className={styles.ctaButton} style={{ background: '#333', color: '#fff', border: '1px solid #444' }}>
           Download APK (Beta)
         </a>
+        <a href="/TrueShift Pitch.pdf" download className={styles.ctaButton} style={{ background: '#333', color: '#fff', border: '1px solid #444', marginLeft: '1rem' }}>
+          Download Pitch Deck
+        </a>
         <p style={{ marginTop: '4rem', fontSize: '0.9rem' }}>
           © 2026 TrueShift AI. Built with Gemini 1.5.
         </p>
