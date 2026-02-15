@@ -1,6 +1,6 @@
 # TrueShift - AI Behavior Intelligence Engine
 
-An AI-first personal performance system that continuously understands movement, environment, recovery, and digital behavior, and adapts coaching in real time.
+An AI-first personal performance system that continuously understands movement, environment, recovery, and digital behavior, and adapts coaching in real time AI Agents architecture .
 
 **Not a workout app. A behavior intelligence engine.**
 
