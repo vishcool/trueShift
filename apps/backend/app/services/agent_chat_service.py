@@ -145,13 +145,32 @@ Respond directly in JSON."""
         Main chat function with user memory and action handling.
         """
         try:
-            # Get user user object (needed for workout service)
+            # Get user object (needed for workout service)
             from sqlalchemy import select
             from app.models.user import User
+            
+            logger.info(f"Fetching user with firebase_uid: {user_id}")
             user_result = await db.execute(select(User).where(User.firebase_uid == user_id))
             user = user_result.scalar_one_or_none()
+            
+            # Auto-create user if this is their first conversation
             if not user:
-                 raise Exception("User not found")
+                logger.info(f"User not found for firebase_uid: {user_id}. Creating new user.")
+                user = User(
+                    firebase_uid=user_id,
+                    email=f"{user_id}@trueshift.local",  # Placeholder email
+                    display_name="New User",
+                    is_active=True,
+                    onboarding_completed=False,
+                    consent_ai_coaching=True,  # Auto-consent for chat to work
+                    consent_health_data=True,
+                )
+                db.add(user)
+                await db.commit()
+                await db.refresh(user)
+                logger.info(f"Created new user: id={user.id}, firebase_uid={user.firebase_uid}")
+            else:
+                logger.info(f"Found user: id={user.id}, firebase_uid={user.firebase_uid}")
 
             # Get user memory
             user_memory = await agent_memory_service.get_user_memory(db, user_id)
@@ -176,20 +195,28 @@ Respond directly in JSON."""
                 temperature=0.7,
                 response_schema={"type": "object"} # Enforce JSON
             )
-            
-            response_content = gemini_response.get("content", "{}")
-            action_data = {}
+            logger.info(f"Gemini response: {gemini_response}")
+            logger.info(f"Gemini response type: {type(gemini_response)}")
+        
+            # Initialize defaults
             response_text = "I'm having trouble processing that."
+            action_data = {}  # Will be populated if action is triggered
             
             try:
-                # Parse JSON response
-                if isinstance(response_content, str):
-                    parsed_response = json.loads(response_content)
+                # Gemini response is already a parsed dict with response/action/workout_params
+                # No need to extract "content" or parse JSON
+                if isinstance(gemini_response, dict):
+                    parsed_response = gemini_response
                 else:
-                    parsed_response = response_content # Already dict if using smart parser
+                    # Fallback: if it's a string, try to parse it
+                    parsed_response = json.loads(gemini_response)
                 
+                # Extract response text and action
                 response_text = parsed_response.get("response", response_text)
                 action = parsed_response.get("action", "none")
+                
+                logger.info(f"Parsed action from Gemini: {action}")
+                logger.info(f"Response text: {response_text}")
                 
                 # Handle Action
                 if action == "generate_workout":
@@ -204,27 +231,33 @@ Respond directly in JSON."""
                         equipment=fitness_profile.get("equipment", [])
                     )
                     
+                    logger.info(f"Generating workout with params: {request}")
+                    
                     # Generate Workout
                     plan = await workout_service.generate_workout(db, user, request)
                     
+                    # Structure action data for frontend
                     action_data = {
                         "action": "view_workout",
                         "data": {
-                            "id": plan.id,
+                            "id": str(plan.id),  # Convert UUID to string for JSON
                             "overview": plan.plan_data.get("overview", "Generated Workout"),
                             "exercises": plan.plan_data.get("exercises", [])
                         }
                     }
                     
+                    logger.info(f"Workout generated successfully: plan_id={plan.id}")
+                    
                     # Update response text if needed (optional)
                     # response_text += f" I've created a {request.target_muscle_group} plan for you."
 
-            except json.JSONDecodeError:
-                logger.error("Failed to parse agent JSON response")
-                response_text = str(response_content) # Fallback to raw text
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse agent JSON response: {e}")
+                logger.error(f"Raw response: {gemini_response}")
+                response_text = "I'm having trouble understanding that request."
             except Exception as e:
-                logger.error(f"Action processing error: {e}")
-                response_text += " (I tried to generate a workout but encountered an error.)"
+                logger.error(f"Action processing error: {e}", exc_info=True)
+                response_text = "I encountered an error while processing your request."
 
             # Save agent response (Clean text only)
             await agent_memory_service.save_conversation(

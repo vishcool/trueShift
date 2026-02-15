@@ -5,6 +5,7 @@ This is the main entry point for the TrueShift backend API.
 Configures middleware, routers, and application lifecycle events.
 """
 
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -15,6 +16,14 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.core.database import init_db, close_db
 from app.middleware.rate_limiter import RateLimitMiddleware
+
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 
 @asynccontextmanager
