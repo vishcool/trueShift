@@ -272,6 +272,12 @@ export function HomeScreen() {
                 <View style={styles.headerRight}>
                     <TouchableOpacity
                         style={styles.iconBtn}
+                        onPress={() => navigation.navigate('VoiceCoach')}
+                    >
+                        <Text style={styles.iconText}>🎤</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.iconBtn}
                         onPress={() => navigation.navigate('ScanEquipment')}
                     >
                         <Text style={styles.iconText}>📸</Text>

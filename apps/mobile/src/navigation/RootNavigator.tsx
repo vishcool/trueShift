@@ -21,6 +21,7 @@ import ExerciseSelectionScreen from '../screens/ExerciseSelectionScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ActiveSessionScreen from '../screens/ActiveSessionScreen';
 import ChatScreen from '../screens/ChatScreen';
+import VoiceCoachScreen from '../screens/VoiceCoachScreen';
 
 export type RootStackParamList = {
     Login: undefined;
@@ -33,6 +34,7 @@ export type RootStackParamList = {
     ExerciseSelection: { suggestions: any[]; analysis?: string };
     Profile: { addedExercises?: any[] } | undefined;
     ActiveSession: { exercises: any[] };
+    VoiceCoach: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -74,6 +76,7 @@ export function RootNavigator() {
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="ActiveSession" component={ActiveSessionScreen} />
             <Stack.Screen name="Chat" component={ChatScreen} />
+            <Stack.Screen name="VoiceCoach" component={VoiceCoachScreen} />
         </Stack.Navigator>
     );
 }

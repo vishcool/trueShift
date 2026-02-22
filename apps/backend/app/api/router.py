@@ -6,7 +6,7 @@ Central router that aggregates all API endpoints.
 
 from fastapi import APIRouter
 
-from app.api.routes import auth, events, state, health, vision, workout, agent
+from app.api.routes import auth, events, state, health, vision, workout, agent, voice
 
 api_router = APIRouter()
 
@@ -57,4 +57,11 @@ api_router.include_router(
     agent.router,
     prefix="/agent",
     tags=["Agent"],
+)
+
+# Voice WebSocket endpoints
+api_router.include_router(
+    voice.router,
+    prefix="/voice",
+    tags=["Voice"],
 )

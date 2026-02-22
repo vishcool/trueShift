@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     google_api_key: str = ""
     gemini_model: str = "gemini-3-flash-preview"
 
+    # Sarvam AI
+    sarvam_api_key: str = ""
+
     # Rate Limiting
     rate_limit_per_minute: int = 60
     rate_limit_burst: int = 10

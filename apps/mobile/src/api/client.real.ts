@@ -161,6 +161,16 @@ export const api = {
         chat: (message: string, context?: any) =>
             apiClient.post<{ response: string; action?: string; data?: any }>('/agent/chat', { message, context }),
     },
+
+    // Voice WebSocket
+    voice: {
+        createSocket: (userId: string) => {
+            // Convert http(s):// to ws(s)://
+            const wsPre = API_BASE_URL.replace(/^http/, 'ws');
+            const wsUrl = `${wsPre}/voice/ws/${userId}`;
+            return new WebSocket(wsUrl);
+        }
+    }
 };
 
 export const authToken = {
