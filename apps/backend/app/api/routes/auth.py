@@ -53,6 +53,7 @@ class UserProfileUpdateRequest(BaseModel):
     fitness_goals: Optional[list[str]] = None
     equipment: Optional[list[str]] = None
     fitness_level: Optional[str] = None
+    voice_preferences: Optional[dict] = None
 
 
 
@@ -66,6 +67,7 @@ class UserResponse(BaseModel):
     is_premium: bool
     onboarding_completed: bool
     consent_status: dict
+    preferences: dict
 
 
 class ConsentResponse(BaseModel):
@@ -108,6 +110,7 @@ async def register_user(
             is_premium=user.is_premium,
             onboarding_completed=user.onboarding_completed,
             consent_status=user.get_consent_status(),
+            preferences=user.preferences,
         )
 
     # Create new user
@@ -132,6 +135,7 @@ async def register_user(
         is_premium=user.is_premium,
         onboarding_completed=user.onboarding_completed,
         consent_status=user.get_consent_status(),
+        preferences=user.preferences,
     )
 
 
@@ -163,6 +167,7 @@ async def get_current_user(
         is_premium=user.is_premium,
         onboarding_completed=user.onboarding_completed,
         consent_status=user.get_consent_status(),
+        preferences=user.preferences,
     )
 
 
@@ -270,6 +275,8 @@ async def update_profile(
         fitness_profile["equipment"] = request.equipment
     if request.fitness_level is not None:
         fitness_profile["level"] = request.fitness_level
+    if request.voice_preferences is not None:
+        prefs["voice_preferences"] = request.voice_preferences
         
     prefs["fitness_profile"] = fitness_profile
     user.preferences = prefs
@@ -290,5 +297,5 @@ async def update_profile(
         is_premium=user.is_premium,
         onboarding_completed=user.onboarding_completed,
         consent_status=user.get_consent_status(),
+        preferences=user.preferences,
     )
-

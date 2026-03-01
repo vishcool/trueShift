@@ -11,6 +11,7 @@ export interface UserResponse {
     is_premium: boolean;
     onboarding_completed: boolean;
     consent_status: Record<string, boolean>;
+    preferences?: Record<string, unknown>;
 }
 
 export interface ConsentUpdate {
@@ -28,6 +29,7 @@ export interface UserProfileUpdate {
     fitness_goals?: string[];
     equipment?: string[];
     fitness_level?: string;
+    voice_preferences?: VoicePreferences;
 }
 
 export interface EventPayload {
@@ -97,4 +99,78 @@ export interface WorkoutPlanResponse {
             notes?: string;
         }[];
     };
+}
+
+export interface AgentChatResponse {
+    response: string;
+    conversation_id?: string;
+    action?: string;
+    data?: unknown;
+}
+
+export interface VoiceSessionContext {
+    mode?: 'general' | 'workout' | 'diet' | 'recovery';
+    language_code?: string;
+    voice?: string;
+    tts_enabled?: boolean;
+    session_id?: string;
+}
+
+export interface VoicePreferences {
+    preferred_language_code: string;
+    preferred_voice: string;
+    default_mode: 'general' | 'workout' | 'diet' | 'recovery';
+    tts_enabled: boolean;
+}
+
+export interface VoiceSessionSummary {
+    session_id: string;
+    started_at: string;
+    last_message_at: string;
+    message_count: number;
+}
+
+export interface VoiceSessionDetail {
+    session_id: string;
+    messages: {
+        id: string;
+        role: string;
+        content: string;
+        created_at: string;
+        agent_name?: string | null;
+    }[];
+}
+
+export interface DietPlanRequest {
+    goal?: string;
+    daily_calories?: number;
+    protein_g?: number;
+    carbs_g?: number;
+    fats_g?: number;
+    meals_per_day?: number;
+    dietary_preferences?: string[];
+    restrictions?: string[];
+    cuisine_preferences?: string[];
+    training_days_per_week?: number;
+}
+
+export interface DietPlanResponse {
+    id: string;
+    created_at: string;
+    goal: string;
+    macro_targets: {
+        calories: number;
+        protein_g: number;
+        carbs_g: number;
+        fats_g: number;
+    };
+    hydration_target_liters: number;
+    meal_templates: {
+        meal_name: string;
+        timing: string;
+        options: string[];
+        notes?: string | null;
+    }[];
+    shopping_focus: string[];
+    adherence_tips: string[];
 }

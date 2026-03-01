@@ -22,6 +22,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import ActiveSessionScreen from '../screens/ActiveSessionScreen';
 import ChatScreen from '../screens/ChatScreen';
 import VoiceCoachScreen from '../screens/VoiceCoachScreen';
+import DietPlanScreen from '../screens/DietPlanScreen';
 
 export type RootStackParamList = {
     Login: undefined;
@@ -34,7 +35,8 @@ export type RootStackParamList = {
     ExerciseSelection: { suggestions: any[]; analysis?: string };
     Profile: { addedExercises?: any[] } | undefined;
     ActiveSession: { exercises: any[] };
-    VoiceCoach: undefined;
+    VoiceCoach: { initialMode?: 'general' | 'workout' | 'diet' | 'recovery' } | undefined;
+    DietPlan: { plan: any } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -77,6 +79,7 @@ export function RootNavigator() {
             <Stack.Screen name="ActiveSession" component={ActiveSessionScreen} />
             <Stack.Screen name="Chat" component={ChatScreen} />
             <Stack.Screen name="VoiceCoach" component={VoiceCoachScreen} />
+            <Stack.Screen name="DietPlan" component={DietPlanScreen} />
         </Stack.Navigator>
     );
 }

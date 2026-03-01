@@ -4,10 +4,28 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import * as SecureStore from 'expo-secure-store';
-import { UserResponse, ConsentUpdate, EventPayload, UserState, Recommendation, AICoaching, VisionAnalysisResponse, UserProfileUpdate, WorkoutGenerationRequest, WorkoutPlanResponse } from './types';
+import {
+    UserResponse,
+    ConsentUpdate,
+    EventPayload,
+    UserState,
+    Recommendation,
+    AICoaching,
+    VisionAnalysisResponse,
+    UserProfileUpdate,
+    WorkoutGenerationRequest,
+    WorkoutPlanResponse,
+    AgentChatResponse,
+    VoiceSessionContext,
+    VoicePreferences,
+    VoiceSessionSummary,
+    VoiceSessionDetail,
+    DietPlanRequest,
+    DietPlanResponse
+} from './types';
 
 // API Configuration
-const API_BASE_URL = "http://192.168.29.242:8000/api/v1"
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://192.168.29.242:8000/api/v1";
 
 const AUTH_TOKEN_KEY = 'auth_token';
 
@@ -159,17 +177,47 @@ export const api = {
     // Agent
     agent: {
         chat: (message: string, context?: any) =>
-            apiClient.post<{ response: string; action?: string; data?: any }>('/agent/chat', { message, context }),
+            apiClient.post<AgentChatResponse>('/agent/chat', { message, context }),
     },
 
     // Voice WebSocket
     voice: {
-        createSocket: (userId: string) => {
+        createSocket: (userId: string, context?: VoiceSessionContext) => {
             // Convert http(s):// to ws(s)://
             const wsPre = API_BASE_URL.replace(/^http/, 'ws');
-            const wsUrl = `${wsPre}/voice/ws/${userId}`;
+            const query = new URLSearchParams();
+            if (context?.mode) {
+                query.set('mode', context.mode);
+            }
+            if (context?.language_code) {
+                query.set('language_code', context.language_code);
+            }
+            if (context?.voice) {
+                query.set('voice', context.voice);
+            }
+            if (typeof context?.tts_enabled === 'boolean') {
+                query.set('tts_enabled', String(context.tts_enabled));
+            }
+            if (context?.session_id) {
+                query.set('session_id', context.session_id);
+            }
+            const queryString = query.toString();
+            const wsUrl = `${wsPre}/voice/ws/${userId}${queryString ? `?${queryString}` : ''}`;
             return new WebSocket(wsUrl);
-        }
+        },
+        getPreferences: () =>
+            apiClient.get<VoicePreferences>('/voice/preferences'),
+        updatePreferences: (payload: Partial<VoicePreferences>) =>
+            apiClient.put<VoicePreferences>('/voice/preferences', payload),
+        getSessions: () =>
+            apiClient.get<VoiceSessionSummary[]>('/voice/sessions'),
+        getSessionDetail: (sessionId: string) =>
+            apiClient.get<VoiceSessionDetail>(`/voice/sessions/${sessionId}`),
+    },
+
+    diet: {
+        generate: (payload: DietPlanRequest) =>
+            apiClient.post<DietPlanResponse>('/diet/generate', payload),
     }
 };
 

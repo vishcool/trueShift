@@ -149,9 +149,12 @@ Respond directly in JSON."""
             from sqlalchemy import select
             from app.models.user import User
             
-            logger.info(f"Fetching user with firebase_uid: {user_id}")
-            user_result = await db.execute(select(User).where(User.firebase_uid == user_id))
+            logger.info(f"Fetching user with id/firebase_uid: {user_id}")
+            user_result = await db.execute(select(User).where(User.id == user_id))
             user = user_result.scalar_one_or_none()
+            if not user:
+                user_result = await db.execute(select(User).where(User.firebase_uid == user_id))
+                user = user_result.scalar_one_or_none()
             
             # Auto-create user if this is their first conversation
             if not user:
@@ -240,9 +243,13 @@ Respond directly in JSON."""
                     action_data = {
                         "action": "view_workout",
                         "data": {
-                            "id": str(plan.id),  # Convert UUID to string for JSON
-                            "overview": plan.plan_data.get("overview", "Generated Workout"),
-                            "exercises": plan.plan_data.get("exercises", [])
+                            "id": str(plan.id),
+                            "created_at": plan.created_at.isoformat() if plan.created_at else None,
+                            "status": plan.status,
+                            "plan_data": {
+                                "overview": plan.plan_data.get("overview", "Generated Workout"),
+                                "exercises": plan.plan_data.get("exercises", [])
+                            }
                         }
                     }
                     

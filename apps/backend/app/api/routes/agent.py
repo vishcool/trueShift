@@ -31,6 +31,8 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     conversation_id: Optional[str] = None
+    action: Optional[str] = None
+    data: Optional[Dict[str, Any]] = None
 
 
 class FitnessProfileUpdate(BaseModel):
@@ -87,7 +89,9 @@ async def chat_with_agent(
         
         return ChatResponse(
             response=result.get("response", ""),
-            conversation_id=result.get("conversation_id")
+            conversation_id=result.get("conversation_id"),
+            action=result.get("action"),
+            data=result.get("data"),
         )
         
     except Exception as e:

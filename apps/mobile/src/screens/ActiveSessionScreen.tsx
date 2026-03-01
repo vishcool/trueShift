@@ -1,50 +1,71 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import {
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+
 import { api } from '../api/client';
+import { SurfaceCard } from '../components/ui/SurfaceCard';
+
+interface SetLog {
+    weight: string;
+    reps: string;
+}
 
 export default function ActiveSessionScreen() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
     const { exercises } = route.params || { exercises: [] };
 
-    // Track input for each exercise
-    // Structure: { [exerciseIndex]: [ { weight: '20', reps: '10' }, ... ] }
-    const [logs, setLogs] = useState<any>({});
+    const [logs, setLogs] = useState<Record<number, SetLog[]>>({});
     const [submitting, setSubmitting] = useState(false);
+    const [sessionStart] = useState(Date.now());
+
+    const estimatedDuration = useMemo(() => {
+        const mins = Math.round((Date.now() - sessionStart) / 60000);
+        return Math.max(mins, 1);
+    }, [sessionStart]);
 
     const updateLog = (exerciseIdx: number, setIdx: number, field: 'weight' | 'reps', value: string) => {
         const currentExLogs = logs[exerciseIdx] || [];
-        // Ensure array size
         const newExLogs = [...currentExLogs];
-        if (!newExLogs[setIdx]) newExLogs[setIdx] = { weight: '', reps: '' };
+        if (!newExLogs[setIdx]) {
+            newExLogs[setIdx] = { weight: '', reps: '' };
+        }
 
         newExLogs[setIdx] = { ...newExLogs[setIdx], [field]: value };
-
-        setLogs({ ...logs, [exerciseIdx]: newExLogs });
+        setLogs((prev) => ({ ...prev, [exerciseIdx]: newExLogs }));
     };
 
     const finishWorkout = async () => {
         setSubmitting(true);
         try {
-            // Construct payload for backend
             const workoutData = {
                 exercises: exercises.map((ex: any, idx: number) => ({
                     name: ex.name,
-                    sets: logs[idx] || []
+                    target_sets: ex.sets,
+                    target_reps: ex.reps,
+                    performed_sets: logs[idx] || [],
                 })),
-                completed_at: new Date().toISOString()
+                duration_minutes: estimatedDuration,
+                completed_at: new Date().toISOString(),
             };
 
-            // Call API (assuming we have a log endpoint or update the existing plan)
-            // await api.workout.log(workoutData);
             await api.workout.record(workoutData);
 
-            Alert.alert("Great Job!", "Workout saved successfully.", [
-                { text: "OK", onPress: () => navigation.navigate('Profile') }
+            Alert.alert('Great Job!', 'Workout saved successfully.', [
+                { text: 'OK', onPress: () => navigation.navigate('Profile') },
             ]);
-        } catch (e) {
-            Alert.alert("Error", "Failed to save workout.");
+        } catch {
+            Alert.alert('Error', 'Failed to save workout. Please try again.');
         } finally {
             setSubmitting(false);
         }
@@ -52,48 +73,49 @@ export default function ActiveSessionScreen() {
 
     return (
         <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.container}
         >
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
+                <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Text style={styles.closeText}>Quit</Text>
                 </TouchableOpacity>
-                <Text style={styles.timer}>00:00</Text>
+                <Text style={styles.timer}>{estimatedDuration} min</Text>
                 <TouchableOpacity onPress={finishWorkout} disabled={submitting}>
-                    <Text style={styles.finishText}>Finish</Text>
+                    <Text style={styles.finishText}>{submitting ? 'Saving...' : 'Finish'}</Text>
                 </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.content}>
+            <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
                 {exercises.map((ex: any, idx: number) => (
-                    <View key={idx} style={styles.exerciseCard}>
+                    <SurfaceCard key={idx} style={styles.exerciseCard}>
                         <Text style={styles.exerciseName}>{ex.name}</Text>
-                        <Text style={styles.targetText}>Target: {ex.sets} sets × {ex.reps}</Text>
+                        <Text style={styles.targetText}>Target: {ex.sets} sets x {ex.reps}</Text>
 
-                        {/* Render Set Inputs */}
-                        {Array.from({ length: ex.sets }).map((_, setIdx) => (
+                        {Array.from({ length: Number(ex.sets) || 1 }).map((_, setIdx) => (
                             <View key={setIdx} style={styles.setRow}>
                                 <Text style={styles.setLabel}>Set {setIdx + 1}</Text>
                                 <TextInput
                                     style={styles.input}
                                     placeholder="kg"
-                                    placeholderTextColor="#555"
+                                    placeholderTextColor="#6B7280"
                                     keyboardType="numeric"
+                                    value={logs[idx]?.[setIdx]?.weight || ''}
                                     onChangeText={(v) => updateLog(idx, setIdx, 'weight', v)}
                                 />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="reps"
-                                    placeholderTextColor="#555"
+                                    placeholderTextColor="#6B7280"
                                     keyboardType="numeric"
+                                    value={logs[idx]?.[setIdx]?.reps || ''}
                                     onChangeText={(v) => updateLog(idx, setIdx, 'reps', v)}
                                 />
                             </View>
                         ))}
-                    </View>
+                    </SurfaceCard>
                 ))}
-                <View style={{ height: 100 }} />
+                <View style={{ height: 24 }} />
             </ScrollView>
         </KeyboardAvoidingView>
     );
@@ -102,60 +124,62 @@ export default function ActiveSessionScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0A0A0A',
+        backgroundColor: '#050505',
     },
     header: {
-        paddingTop: 60,
-        paddingHorizontal: 20,
-        paddingBottom: 20,
+        paddingTop: 58,
+        paddingHorizontal: 16,
+        paddingBottom: 14,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         borderBottomWidth: 1,
-        borderBottomColor: '#222',
+        borderBottomColor: '#222222',
     },
-    closeBtn: {},
-    closeText: { color: '#EF4444', fontSize: 16 },
-    timer: { color: 'white', fontSize: 18, fontWeight: 'bold' },
-    finishText: { color: '#10B981', fontSize: 16, fontWeight: 'bold' },
+    closeText: { color: '#F87171', fontSize: 16 },
+    timer: { color: '#F3F4F6', fontSize: 18, fontWeight: '700' },
+    finishText: { color: '#93C5FD', fontSize: 16, fontWeight: '700' },
     content: {
-        padding: 20,
+        flex: 1,
+    },
+    contentContainer: {
+        padding: 16,
     },
     exerciseCard: {
-        backgroundColor: '#1F1F1F',
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 20,
+        padding: 14,
+        marginBottom: 14,
     },
     exerciseName: {
-        color: 'white',
+        color: '#FFFFFF',
         fontSize: 18,
-        fontWeight: 'bold',
+        fontWeight: '700',
         marginBottom: 4,
     },
     targetText: {
-        color: '#999',
+        color: '#9CA3AF',
         fontSize: 14,
-        marginBottom: 16,
+        marginBottom: 12,
     },
     setRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 12,
-        gap: 12,
+        marginBottom: 10,
+        gap: 10,
     },
     setLabel: {
-        color: '#666',
-        width: 40,
+        color: '#9CA3AF',
+        width: 46,
+        fontSize: 13,
     },
     input: {
         flex: 1,
-        backgroundColor: '#111',
+        backgroundColor: '#0F0F0F',
         borderWidth: 1,
-        borderColor: '#333',
-        borderRadius: 8,
-        padding: 12,
-        color: 'white',
+        borderColor: '#2F2F2F',
+        borderRadius: 10,
+        padding: 11,
+        color: '#F3F4F6',
         textAlign: 'center',
+        fontSize: 14,
     },
 });

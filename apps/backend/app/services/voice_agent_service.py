@@ -73,7 +73,13 @@ class VoiceAgentService:
             logger.error(f"Intent routing failed: {e}")
             return "general"
 
-    async def get_agent_response(self, user_id: str, transcript: str, user_state: UserState) -> str:
+    async def get_agent_response(
+        self,
+        user_id: str,
+        transcript: str,
+        user_state: UserState,
+        session_context: Optional[Dict[str, Any]] = None
+    ) -> str:
         """
         Routes the transcript to the correct specialized agent and extracts a conversational response.
         """
@@ -114,7 +120,24 @@ class VoiceAgentService:
                  
         # Default / General (Coaching Agent acts as generic chat wrapper)
         # Using Coaching agent with the transcript injected
-        context_str = f"User said: {transcript}\nRespond conversationally as a personal trainer in 1-2 short sentences."
+        mode = (session_context or {}).get("mode", "general")
+        mode_instruction = ""
+        if mode == "diet":
+            mode_instruction = (
+                "Prioritize practical nutrition coaching first (meals, macros, hydration), "
+                "then tie back to workout outcomes."
+            )
+        elif mode == "workout":
+            mode_instruction = "Prioritize exercise programming, form cues, and progression details."
+        elif mode == "recovery":
+            mode_instruction = "Prioritize recovery, sleep, soreness, and stress-management guidance."
+
+        context_str = (
+            f"User said: {transcript}\n"
+            f"Conversation mode: {mode}\n"
+            f"{mode_instruction}\n"
+            "Respond conversationally as a personal trainer in 1-2 short sentences."
+        )
         context.additional_context["user_voice_input"] = context_str
         
         general_res = await ai_orchestrator.coaching_agent.process(context)
@@ -129,7 +152,12 @@ class VoiceAgentService:
                 
         return "I heard you, let's keep working."
 
-    async def generate_tts(self, text: str) -> Optional[str]:
+    async def generate_tts(
+        self,
+        text: str,
+        language_code: str = "en-IN",
+        speaker: str = "meera"
+    ) -> Optional[str]:
         """
         Calls Sarvam TTS endpoint and returns base64-encoded WAV string.
         """
@@ -138,8 +166,8 @@ class VoiceAgentService:
         
         payload = {
             "inputs": [clean_text],
-            "target_language_code": "en-IN",
-            "speaker": "meera",
+            "target_language_code": language_code,
+            "speaker": speaker,
             "pitch": 0,
             "pace": 1.05,
             "loudness": 1.5,

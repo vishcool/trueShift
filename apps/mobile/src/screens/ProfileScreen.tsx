@@ -1,11 +1,55 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import {
+    Alert,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+
 import { useAuth } from '../hooks/useAuth';
+import { SurfaceCard } from '../components/ui/SurfaceCard';
 
 export default function ProfileScreen() {
     const navigation = useNavigation<any>();
-    const { user, logout } = useAuth();
+    const { user, logout, updateProfile } = useAuth();
+
+    const existingProfile = useMemo(() => {
+        const preferences = (user?.preferences as any) || {};
+        return preferences.fitness_profile || {};
+    }, [user?.preferences]);
+
+    const [displayName, setDisplayName] = useState(user?.display_name || '');
+    const [fitnessLevel, setFitnessLevel] = useState(existingProfile.level || 'Intermediate');
+    const [goalsText, setGoalsText] = useState((existingProfile.goals || []).join(', '));
+    const [equipmentText, setEquipmentText] = useState((existingProfile.equipment || []).join(', '));
+    const [saving, setSaving] = useState(false);
+
+    const parseCsv = (value: string) =>
+        value
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean);
+
+    const handleSaveProfile = async () => {
+        try {
+            setSaving(true);
+            await updateProfile({
+                display_name: displayName.trim(),
+                fitness_level: fitnessLevel.trim(),
+                fitness_goals: parseCsv(goalsText),
+                equipment: parseCsv(equipmentText),
+            });
+            Alert.alert('Saved', 'Profile updated successfully.');
+        } catch {
+            Alert.alert('Error', 'Failed to update profile.');
+        } finally {
+            setSaving(false);
+        }
+    };
 
     const handleGoBack = () => {
         if (navigation.canGoBack()) {
@@ -16,107 +60,77 @@ export default function ProfileScreen() {
     };
 
     const handleLogout = () => {
-        Alert.alert(
-            "Logout",
-            "Are you sure you want to logout?",
-            [
-                { text: "Cancel", style: "cancel" },
-                { text: "Logout", style: "destructive", onPress: logout }
-            ]
-        );
+        Alert.alert('Logout', 'Are you sure you want to logout?', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Logout', style: 'destructive', onPress: logout },
+        ]);
     };
 
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
-                    <Text style={styles.backButtonText}>← Back</Text>
+                <TouchableOpacity onPress={handleGoBack}>
+                    <Text style={styles.backButtonText}>Back</Text>
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>My Profile</Text>
-                <View style={{ width: 60 }} />
+                <View style={{ width: 44 }} />
             </View>
 
-            <ScrollView style={styles.content}>
-                {/* Profile Avatar */}
+            <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
                 <View style={styles.avatarSection}>
                     <View style={styles.avatar}>
-                        <Text style={styles.avatarText}>
-                            {user?.display_name?.charAt(0).toUpperCase() || 'U'}
-                        </Text>
+                        <Text style={styles.avatarText}>{displayName?.charAt(0).toUpperCase() || 'U'}</Text>
                     </View>
-                    <Text style={styles.displayName}>{user?.display_name || 'User'}</Text>
+                    <Text style={styles.displayName}>{displayName || 'User'}</Text>
                     <Text style={styles.email}>{user?.email || 'No email'}</Text>
                 </View>
 
-                {/* Profile Information */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Account Information</Text>
+                <Text style={styles.sectionTitle}>Edit Profile</Text>
+                <SurfaceCard style={styles.card}>
+                    <Text style={styles.label}>Display Name</Text>
+                    <TextInput
+                        style={styles.input}
+                        value={displayName}
+                        onChangeText={setDisplayName}
+                        placeholder="Your name"
+                        placeholderTextColor="#6B7280"
+                    />
 
-                    <View style={styles.infoCard}>
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Status</Text>
-                            <View style={styles.statusBadge}>
-                                <Text style={styles.statusText}>
-                                    {user?.is_premium ? 'Premium' : 'Free'}
-                                </Text>
-                            </View>
-                        </View>
+                    <Text style={styles.label}>Fitness Level</Text>
+                    <TextInput
+                        style={styles.input}
+                        value={fitnessLevel}
+                        onChangeText={setFitnessLevel}
+                        placeholder="Beginner / Intermediate / Advanced"
+                        placeholderTextColor="#6B7280"
+                    />
 
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Account Active</Text>
-                            <Text style={styles.infoValue}>
-                                {user?.is_active ? 'Yes' : 'No'}
-                            </Text>
-                        </View>
+                    <Text style={styles.label}>Goals (comma separated)</Text>
+                    <TextInput
+                        style={styles.input}
+                        value={goalsText}
+                        onChangeText={setGoalsText}
+                        placeholder="Fat Loss, Strength, Endurance"
+                        placeholderTextColor="#6B7280"
+                    />
 
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Onboarding</Text>
-                            <Text style={styles.infoValue}>
-                                {user?.onboarding_completed ? 'Completed' : 'Pending'}
-                            </Text>
-                        </View>
-                    </View>
-                </View>
+                    <Text style={styles.label}>Equipment (comma separated)</Text>
+                    <TextInput
+                        style={styles.input}
+                        value={equipmentText}
+                        onChangeText={setEquipmentText}
+                        placeholder="Dumbbells, Barbell"
+                        placeholderTextColor="#6B7280"
+                    />
 
-                {/* Fitness Profile */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Fitness Profile</Text>
-
-                    <View style={styles.infoCard}>
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Fitness Level</Text>
-                            <Text style={styles.infoValue}>Intermediate</Text>
-                        </View>
-
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Goals</Text>
-                            <Text style={styles.infoValue}>Build Muscle, Lose Fat</Text>
-                        </View>
-
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Equipment</Text>
-                            <Text style={styles.infoValue}>Dumbbells, Barbell</Text>
-                        </View>
-                    </View>
-                </View>
-
-                {/* Actions */}
-                <View style={styles.section}>
-                    <TouchableOpacity style={styles.actionButton}>
-                        <Text style={styles.actionButtonText}>Edit Profile</Text>
+                    <TouchableOpacity style={styles.saveButton} onPress={handleSaveProfile} disabled={saving}>
+                        <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Profile'}</Text>
                     </TouchableOpacity>
+                </SurfaceCard>
 
-                    <TouchableOpacity
-                        style={[styles.actionButton, styles.logoutButton]}
-                        onPress={handleLogout}
-                    >
-                        <Text style={[styles.actionButtonText, styles.logoutButtonText]}>
-                            Logout
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-
-                <View style={{ height: 40 }} />
+                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                    <Text style={styles.logoutButtonText}>Logout</Text>
+                </TouchableOpacity>
             </ScrollView>
         </View>
     );
@@ -125,125 +139,111 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0A0A0A',
+        backgroundColor: '#050505',
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingTop: 60,
-        paddingHorizontal: 20,
-        paddingBottom: 20,
+        paddingTop: 58,
+        paddingHorizontal: 16,
+        paddingBottom: 14,
         borderBottomWidth: 1,
-        borderBottomColor: '#222',
-    },
-    backButton: {
-        width: 60,
+        borderBottomColor: '#222222',
     },
     backButtonText: {
-        color: '#6366F1',
+        color: '#93C5FD',
         fontSize: 16,
     },
     headerTitle: {
-        color: '#FFFFFF',
+        color: '#F9FAFB',
         fontSize: 20,
-        fontWeight: 'bold',
+        fontWeight: '700',
     },
     content: {
         flex: 1,
     },
+    contentInner: {
+        padding: 16,
+        paddingBottom: 28,
+    },
     avatarSection: {
         alignItems: 'center',
-        paddingVertical: 32,
-        borderBottomWidth: 1,
-        borderBottomColor: '#1F1F1F',
+        marginBottom: 20,
     },
     avatar: {
         width: 80,
         height: 80,
         borderRadius: 40,
-        backgroundColor: '#6366F1',
+        backgroundColor: '#1F2937',
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: 12,
     },
     avatarText: {
         color: '#FFFFFF',
-        fontSize: 32,
-        fontWeight: 'bold',
+        fontSize: 30,
+        fontWeight: '700',
     },
     displayName: {
-        color: '#FFFFFF',
-        fontSize: 24,
-        fontWeight: 'bold',
+        color: '#F9FAFB',
+        fontSize: 22,
+        fontWeight: '700',
         marginBottom: 4,
     },
     email: {
         color: '#9CA3AF',
         fontSize: 14,
     },
-    section: {
-        paddingHorizontal: 20,
-        paddingTop: 24,
-    },
     sectionTitle: {
-        color: '#FFFFFF',
-        fontSize: 18,
-        fontWeight: '600',
-        marginBottom: 16,
+        color: '#E5E7EB',
+        fontSize: 17,
+        fontWeight: '700',
+        marginBottom: 10,
     },
-    infoCard: {
-        backgroundColor: '#1F1F1F',
-        borderRadius: 12,
-        padding: 16,
+    card: {
+        padding: 14,
     },
-    infoRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+    label: {
+        color: '#D1D5DB',
+        fontSize: 13,
+        marginBottom: 6,
+        marginTop: 4,
+    },
+    input: {
+        backgroundColor: '#0F0F0F',
+        borderWidth: 1,
+        borderColor: '#2F2F2F',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        color: '#F3F4F6',
+        fontSize: 14,
+        marginBottom: 6,
+    },
+    saveButton: {
+        marginTop: 12,
+        backgroundColor: '#2563EB',
+        borderRadius: 10,
         alignItems: 'center',
         paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#2A2A2A',
     },
-    infoLabel: {
-        color: '#9CA3AF',
-        fontSize: 14,
-    },
-    infoValue: {
+    saveButtonText: {
         color: '#FFFFFF',
         fontSize: 14,
-        fontWeight: '500',
-    },
-    statusBadge: {
-        backgroundColor: '#6366F1',
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    statusText: {
-        color: '#FFFFFF',
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    actionButton: {
-        backgroundColor: '#1F1F1F',
-        paddingVertical: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: '#333',
-    },
-    actionButtonText: {
-        color: '#FFFFFF',
-        fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
     },
     logoutButton: {
-        backgroundColor: 'transparent',
-        borderColor: '#EF4444',
+        marginTop: 16,
+        borderWidth: 1,
+        borderColor: '#B91C1C',
+        borderRadius: 10,
+        alignItems: 'center',
+        paddingVertical: 12,
     },
     logoutButtonText: {
-        color: '#EF4444',
+        color: '#F87171',
+        fontSize: 14,
+        fontWeight: '700',
     },
 });

@@ -42,6 +42,36 @@ interface WorkoutPlan {
     };
 }
 
+function normalizeWorkoutPlan(raw: any): WorkoutPlan | null {
+    if (!raw) return null;
+
+    if (raw.plan_data && Array.isArray(raw.plan_data.exercises)) {
+        return {
+            id: raw.id || `plan-${Date.now()}`,
+            plan_data: {
+                overview: raw.plan_data.overview || 'Generated Workout',
+                exercises: raw.plan_data.exercises || [],
+            },
+        };
+    }
+
+    if (Array.isArray(raw.exercises)) {
+        return {
+            id: raw.id || `plan-${Date.now()}`,
+            plan_data: {
+                overview: raw.overview || 'Generated Workout',
+                exercises: raw.exercises,
+            },
+        };
+    }
+
+    if (raw.data) {
+        return normalizeWorkoutPlan(raw.data);
+    }
+
+    return null;
+}
+
 const EQUIPMENT_OPTIONS = [
     'Dumbbells',
     'Barbell',
@@ -76,7 +106,10 @@ export function WorkoutGenScreen() {
 
     useEffect(() => {
         if (route.params?.generatedPlan) {
-            setWorkoutPlan(route.params.generatedPlan);
+            const normalized = normalizeWorkoutPlan(route.params.generatedPlan);
+            if (normalized) {
+                setWorkoutPlan(normalized);
+            }
         }
 
         // Initial greeting
@@ -154,10 +187,20 @@ export function WorkoutGenScreen() {
             };
             setMessages(prev => [...prev, agentMsg]);
 
-            // If the agent's response suggests a new workout, regenerate
-            if (response.data.response.toLowerCase().includes('generated') ||
-                response.data.response.toLowerCase().includes('updated')) {
-                await generateWorkout();
+            if (response.data.action === 'view_workout' && response.data.data) {
+                const normalizedPlan = normalizeWorkoutPlan(response.data.data);
+                if (normalizedPlan) {
+                    setWorkoutPlan(normalizedPlan);
+                }
+                setMessages(prev => [
+                    ...prev,
+                    {
+                        id: (Date.now() + 2).toString(),
+                        text: `Updated workout loaded with ${normalizedPlan?.plan_data.exercises.length || 0} exercises.`,
+                        sender: 'agent',
+                        timestamp: new Date(),
+                    },
+                ]);
             }
         } catch (error) {
             const errorMsg: Message = {
