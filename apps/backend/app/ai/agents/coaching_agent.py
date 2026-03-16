@@ -117,7 +117,7 @@ class CoachingAgent(BaseAgent):
         """
         Generate coaching message using LLM or rules.
         """
-        if self.model is None:
+        if self.client is None:
             return self._rule_based_coaching(context.user_state, approach)
 
         prompt = f"""

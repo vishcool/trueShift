@@ -7,7 +7,7 @@ Following Google ADK patterns - agents are modular, stateless, and context-drive
 
 from abc import ABC, abstractmethod
 from typing import Any, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
 
@@ -20,9 +20,9 @@ class AgentContext(BaseModel):
     """
     user_id: str
     user_state: dict  # Serialized UserState
-    recent_events: list[dict] = []
-    conversation_history: list[dict] = []
-    additional_context: dict = {}
+    recent_events: list[dict] = Field(default_factory=list)
+    conversation_history: list[dict] = Field(default_factory=list)
+    additional_context: dict = Field(default_factory=dict)
 
 
 class AgentResponse(BaseModel):
@@ -34,8 +34,8 @@ class AgentResponse(BaseModel):
     content: Any
     reasoning: Optional[str] = None
     confidence: float = 0.0
-    suggestions: list[str] = []
-    metadata: dict = {}
+    suggestions: list[str] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
 
 
 class BaseAgent(ABC):

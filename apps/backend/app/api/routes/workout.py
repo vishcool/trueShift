@@ -11,13 +11,14 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from pydantic import BaseModel
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import get_current_user_id
-from app.models.user import User
+from app.models.event import EventSource, EventType
 from app.models.workout import WorkoutPlan
 from app.models.user_state import UserState, RecoveryStatus
+from app.services.event_processor import EventPayload, EventProcessor
+from app.services.user_service import user_service
 from app.services.workout_service import workout_service
 
 # Import Shared Schemas
@@ -37,6 +38,7 @@ class WorkoutRecordRequest(BaseModel):
     duration_minutes: int
     notes: Optional[str] = None
     completed_at: datetime
+    session_id: Optional[str] = None
 
 # ============================================================================
 # Endpoints
@@ -53,10 +55,7 @@ async def generate_workout(
     Delegates to WorkoutService.
     """
     # Verify user
-    result = await db.execute(select(User).where(User.firebase_uid == user_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = await user_service.require_user_by_firebase_uid(db, user_id)
 
     try:
         plan = await workout_service.generate_workout(db, user, request)
@@ -86,10 +85,7 @@ async def generate_workout_with_vision(
     Generate a personalized workout by analyzing equipment from an image.
     """
     # Verify user
-    result = await db.execute(select(User).where(User.firebase_uid == user_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = await user_service.require_user_by_firebase_uid(db, user_id)
 
     # Read image
     content = await file.read()
@@ -166,21 +162,63 @@ async def record_workout(
     Record a fully completed ad-hoc workout.
     """
     # Verify user
-    result = await db.execute(select(User).where(User.firebase_uid == user_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = await user_service.require_user_by_firebase_uid(db, user_id)
 
     # Create WorkoutPlan
     plan = WorkoutPlan(
         user_id=user.id,
         status="completed",
         plan_data={"exercises": request.exercises, "overview": "Ad-hoc Session"},
-        completion_data={"exercises": request.exercises}, 
+        completion_data={
+            "exercises": request.exercises,
+            "duration_minutes": request.duration_minutes,
+            "session_id": request.session_id,
+            "summary": {
+                "exercise_count": len(request.exercises),
+                "set_count": sum(len(exercise.get("performed_sets", [])) for exercise in request.exercises),
+            },
+        },
         feedback_notes=request.notes,
         completed_at=request.completed_at
     )
     db.add(plan)
+    await db.flush()
+
+    processor = EventProcessor(db)
+    session_id = request.session_id or f"workout-{plan.id}"
+    await processor.process(
+        user_id=user.id,
+        event_payload=EventPayload(
+            event_type=EventType.WORKOUT_COMPLETED.value,
+            payload={
+                "workout_type": "ad_hoc",
+                "duration_minutes": request.duration_minutes,
+                "exercise_count": len(request.exercises),
+            },
+            timestamp=request.completed_at,
+            session_id=session_id,
+            correlation_id=f"workout-record:{user.id}:{request.completed_at.isoformat()}",
+        ),
+        source=EventSource.MOBILE,
+    )
+
+    for index, exercise in enumerate(request.exercises):
+        await processor.process(
+            user_id=user.id,
+            event_payload=EventPayload(
+                event_type=EventType.WORKOUT_EXERCISE_LOGGED.value,
+                payload={
+                    "index": index,
+                    "name": exercise.get("name"),
+                    "performed_sets": exercise.get("performed_sets", []),
+                },
+                timestamp=request.completed_at,
+                session_id=session_id,
+                correlation_id=f"workout-exercise:{user.id}:{request.completed_at.isoformat()}:{index}",
+            ),
+            source=EventSource.MOBILE,
+        )
+
     await db.commit()
     await db.refresh(plan)
 
@@ -204,10 +242,7 @@ async def log_workout(
     Log a completed workout.
     """
     # Verify user
-    result = await db.execute(select(User).where(User.firebase_uid == user_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = await user_service.require_user_by_firebase_uid(db, user_id)
 
     # Get Plan
     result = await db.execute(select(WorkoutPlan).where(WorkoutPlan.id == request.plan_id))
@@ -224,6 +259,23 @@ async def log_workout(
     plan.completion_data = request.completion_data
     plan.feedback_notes = request.feedback
     plan.completed_at = datetime.utcnow()
+
+    processor = EventProcessor(db)
+    await processor.process(
+        user_id=user.id,
+        event_payload=EventPayload(
+            event_type=EventType.WORKOUT_COMPLETED.value,
+            payload={
+                "workout_type": plan.plan_data.get("overview", "planned_session"),
+                "duration_minutes": request.completion_data.get("duration_minutes"),
+                "exercise_count": len(request.completion_data.get("exercises", [])),
+            },
+            timestamp=plan.completed_at,
+            session_id=request.completion_data.get("session_id"),
+            correlation_id=f"workout-log:{user.id}:{plan.id}:{plan.completed_at.isoformat()}",
+        ),
+        source=EventSource.MOBILE,
+    )
     
     await db.commit()
     await db.refresh(plan)
@@ -248,10 +300,7 @@ async def get_workout_history(
     Get past workouts.
     """
     # Verify user
-    result = await db.execute(select(User).where(User.firebase_uid == user_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = await user_service.require_user_by_firebase_uid(db, user_id)
 
     # Get Plans
     result = await db.execute(

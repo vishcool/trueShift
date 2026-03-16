@@ -82,7 +82,7 @@ class ContextAgent(BaseAgent):
         state = context.user_state
 
         # For development/fallback, generate rule-based summary
-        if self.model is None:
+        if self.client is None:
             return self._rule_based_summary(state)
 
         prompt = """

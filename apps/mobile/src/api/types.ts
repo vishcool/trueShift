@@ -63,9 +63,32 @@ export interface Recommendation {
 
 export interface AICoaching {
     context_summary: Record<string, unknown> | null;
+    planner?: Record<string, unknown> | null;
     coaching: Record<string, unknown> | null;
     workout: Record<string, unknown> | null;
     errors: string[];
+}
+
+export interface WorkoutPerformedSet {
+    set_number: number;
+    weight: string;
+    reps: string;
+    completed_at?: string;
+}
+
+export interface WorkoutRecordedExercise {
+    name: string;
+    target_sets?: number | string;
+    target_reps?: number | string;
+    performed_sets: WorkoutPerformedSet[];
+}
+
+export interface WorkoutRecordPayload {
+    exercises: WorkoutRecordedExercise[];
+    duration_minutes: number;
+    completed_at: string;
+    notes?: string;
+    session_id?: string;
 }
 
 export interface VisionAnalysisResponse {
@@ -88,6 +111,7 @@ export interface WorkoutGenerationRequest {
 export interface WorkoutPlanResponse {
     id: string;
     created_at: string;
+    scheduled_date?: string | null;
     status: string;
     plan_data: {
         overview: string;
@@ -99,6 +123,57 @@ export interface WorkoutPlanResponse {
             notes?: string;
         }[];
     };
+    completion_data?: {
+        exercises?: WorkoutRecordedExercise[];
+        duration_minutes?: number;
+        session_id?: string;
+        summary?: {
+            exercise_count?: number;
+            set_count?: number;
+        };
+    } | null;
+    feedback_notes?: string | null;
+}
+
+export interface ProgressDashboard {
+    overview: {
+        workouts_completed: number;
+        workouts_this_week: number;
+        minutes_this_week: number;
+        sets_logged: number;
+        avg_reps_per_set: number;
+        total_volume_kg: number;
+        recovery_status: string;
+        readiness_label: string;
+    };
+    recovery: {
+        status: string;
+        sleep_hours: number | null;
+        hrv_score: number | null;
+        resting_heart_rate: number | null;
+        active_minutes_today: number;
+    };
+    focus: {
+        primary_training_focus: string;
+        top_logged_exercises: string[];
+    };
+    insights: Array<{
+        type: string;
+        title: string;
+        detail: string;
+        priority: string;
+    }>;
+    suggestions: string[];
+    recent_sessions: Array<{
+        id: string;
+        created_at: string;
+        status: string;
+        overview: string;
+        exercise_count: number;
+        set_count: number;
+        duration_minutes: number;
+        volume_kg: number;
+    }>;
 }
 
 export interface AgentChatResponse {

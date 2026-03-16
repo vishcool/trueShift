@@ -6,15 +6,14 @@ User state and AI recommendation endpoints.
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import get_current_user_id
-from app.models.user import User
-from app.models.user_state import UserState
 from app.services.user_state_engine import UserStateEngine
 from app.services.recommendation_engine import RecommendationEngine
+from app.services.progress_dashboard_service import progress_dashboard_service
+from app.services.user_service import user_service
 from app.ai.orchestrator import ai_orchestrator
 
 router = APIRouter()
@@ -45,9 +44,61 @@ class RecommendationsResponse(BaseModel):
 class AICoachingResponse(BaseModel):
     """AI coaching response."""
     context_summary: dict | None
+    planner: dict | None = None
     coaching: dict | None
     workout: dict | None
     errors: list[str]
+
+
+class DashboardOverview(BaseModel):
+    workouts_completed: int
+    workouts_this_week: int
+    minutes_this_week: int
+    sets_logged: int
+    avg_reps_per_set: float
+    total_volume_kg: float
+    recovery_status: str
+    readiness_label: str
+
+
+class DashboardRecovery(BaseModel):
+    status: str
+    sleep_hours: float | None
+    hrv_score: float | None
+    resting_heart_rate: int | None
+    active_minutes_today: int
+
+
+class DashboardFocus(BaseModel):
+    primary_training_focus: str
+    top_logged_exercises: list[str]
+
+
+class DashboardInsight(BaseModel):
+    type: str
+    title: str
+    detail: str
+    priority: str
+
+
+class DashboardSession(BaseModel):
+    id: str
+    created_at: str
+    status: str
+    overview: str
+    exercise_count: int
+    set_count: int
+    duration_minutes: int
+    volume_kg: float
+
+
+class ProgressDashboardResponse(BaseModel):
+    overview: DashboardOverview
+    recovery: DashboardRecovery
+    focus: DashboardFocus
+    insights: list[DashboardInsight]
+    suggestions: list[str]
+    recent_sessions: list[DashboardSession]
 
 
 # ============================================================================
@@ -64,16 +115,7 @@ async def get_user_state(
     Get current user state.
     """
     # Get user
-    result = await db.execute(
-        select(User).where(User.firebase_uid == firebase_uid)
-    )
-    user = result.scalar_one_or_none()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+    user = await user_service.require_user_by_firebase_uid(db, firebase_uid)
 
     # Get state
     state_engine = UserStateEngine(db)
@@ -102,16 +144,7 @@ async def get_recommendations(
     Get personalized recommendations based on current state.
     """
     # Get user
-    result = await db.execute(
-        select(User).where(User.firebase_uid == firebase_uid)
-    )
-    user = result.scalar_one_or_none()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+    user = await user_service.require_user_by_firebase_uid(db, firebase_uid)
 
     # Get state
     state_engine = UserStateEngine(db)
@@ -127,6 +160,18 @@ async def get_recommendations(
     )
 
 
+@router.get("/dashboard", response_model=ProgressDashboardResponse)
+async def get_progress_dashboard(
+    firebase_uid: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await user_service.require_user_by_firebase_uid(db, firebase_uid)
+    state_engine = UserStateEngine(db)
+    state = await state_engine.get_or_create_state(user.id)
+    dashboard = await progress_dashboard_service.build_dashboard(db, user.id, state)
+    return ProgressDashboardResponse(**dashboard)
+
+
 @router.get("/ai/coaching", response_model=AICoachingResponse)
 async def get_ai_coaching(
     firebase_uid: str = Depends(get_current_user_id),
@@ -137,16 +182,7 @@ async def get_ai_coaching(
     Runs the complete multi-agent pipeline.
     """
     # Get user
-    result = await db.execute(
-        select(User).where(User.firebase_uid == firebase_uid)
-    )
-    user = result.scalar_one_or_none()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+    user = await user_service.require_user_by_firebase_uid(db, firebase_uid)
 
     # Check AI coaching consent
     if not user.consent_ai_coaching:
@@ -167,6 +203,7 @@ async def get_ai_coaching(
 
     return AICoachingResponse(
         context_summary=result.context_summary,
+        planner=result.planner,
         coaching=result.coaching,
         workout=result.workout,
         errors=result.errors,
@@ -182,16 +219,7 @@ async def get_workout_recommendation(
     Get workout recommendation only.
     """
     # Get user
-    result = await db.execute(
-        select(User).where(User.firebase_uid == firebase_uid)
-    )
-    user = result.scalar_one_or_none()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+    user = await user_service.require_user_by_firebase_uid(db, firebase_uid)
 
     # Get state
     state_engine = UserStateEngine(db)

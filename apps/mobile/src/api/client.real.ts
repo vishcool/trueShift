@@ -15,13 +15,15 @@ import {
     UserProfileUpdate,
     WorkoutGenerationRequest,
     WorkoutPlanResponse,
+    WorkoutRecordPayload,
     AgentChatResponse,
     VoiceSessionContext,
     VoicePreferences,
     VoiceSessionSummary,
     VoiceSessionDetail,
     DietPlanRequest,
-    DietPlanResponse
+    DietPlanResponse,
+    ProgressDashboard
 } from './types';
 
 // API Configuration
@@ -124,6 +126,9 @@ export const api = {
         getAICoaching: () =>
             apiClient.get<AICoaching>('/state/ai/coaching'),
 
+        getDashboard: () =>
+            apiClient.get<ProgressDashboard>('/state/dashboard'),
+
         getWorkout: () =>
             apiClient.get('/state/ai/workout'),
     },
@@ -144,7 +149,7 @@ export const api = {
 
     // Workout
     workout: {
-        record: (data: { exercises: any[], duration_minutes: number, completed_at: string }) =>
+        record: (data: WorkoutRecordPayload) =>
             apiClient.post<WorkoutPlanResponse>('/workout/record', data),
 
         generate: (data: WorkoutGenerationRequest) =>

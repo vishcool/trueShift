@@ -35,7 +35,10 @@ export type RootStackParamList = {
     ExerciseSelection: { suggestions: any[]; analysis?: string };
     Profile: { addedExercises?: any[] } | undefined;
     ActiveSession: { exercises: any[] };
-    VoiceCoach: { initialMode?: 'general' | 'workout' | 'diet' | 'recovery' } | undefined;
+    VoiceCoach: {
+        initialMode?: 'general' | 'workout' | 'diet' | 'recovery';
+        activeWorkout?: boolean;
+    } | undefined;
     DietPlan: { plan: any } | undefined;
 };
 

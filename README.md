@@ -107,6 +107,16 @@ trueShift/
 └── README.md
 ```
 
+## Architecture Specs
+
+The current planner/MCP and event-tracking contracts live here:
+
+- `apps/backend/app/docs/MCP_MULTI_AGENT_SPEC.md`
+- `apps/backend/app/docs/EVENT_AND_TRACKING_SPEC.md`
+- `apps/backend/app/docs/VOICE_WORKOUT_LIVE_SPEC.md`
+
+These specs are intended to be the shared reference for future agent work, live conversation improvements, and workout tracking evolution.
+
 ## API Endpoints
 
 | Endpoint | Method | Description |

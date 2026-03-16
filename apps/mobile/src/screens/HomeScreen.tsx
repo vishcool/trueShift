@@ -14,7 +14,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 
-import { api, AgentChatResponse, DietPlanResponse } from '../api/client';
+import { api, AgentChatResponse, DietPlanResponse, ProgressDashboard } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
 import { ActionChip } from '../components/ui/ActionChip';
 import { MessageBubble } from '../components/ui/MessageBubble';
@@ -170,6 +170,16 @@ export function HomeScreen() {
             return response.data as WorkoutHistoryItem[];
         },
         staleTime: 1000 * 60 * 2,
+    });
+
+    const { data: dashboardData } = useQuery({
+        queryKey: ['progressDashboard'],
+        queryFn: async () => {
+            const response = await api.state.getDashboard();
+            return response.data as ProgressDashboard;
+        },
+        staleTime: 1000 * 30,
+        refetchInterval: 1000 * 30,
     });
 
     useEffect(() => {
@@ -432,20 +442,54 @@ export function HomeScreen() {
 
             <SurfaceCard style={styles.metricsCard}>
                 <View style={styles.metricItem}>
-                    <Text style={styles.metricValue}>{typeof stateData?.physical?.workouts_this_week === 'number' ? stateData.physical.workouts_this_week : 0}</Text>
+                    <Text style={styles.metricValue}>{dashboardData?.overview.workouts_this_week ?? (typeof stateData?.physical?.workouts_this_week === 'number' ? stateData.physical.workouts_this_week : 0)}</Text>
                     <Text style={styles.metricLabel}>Workouts</Text>
                 </View>
                 <View style={styles.metricDivider} />
                 <View style={styles.metricItem}>
-                    <Text style={styles.metricValue}>{typeof stateData?.physical?.active_minutes === 'number' ? stateData.physical.active_minutes : 0}</Text>
+                    <Text style={styles.metricValue}>{dashboardData?.overview.minutes_this_week ?? (typeof stateData?.physical?.active_minutes === 'number' ? stateData.physical.active_minutes : 0)}</Text>
                     <Text style={styles.metricLabel}>Active Min</Text>
                 </View>
                 <View style={styles.metricDivider} />
                 <View style={styles.metricItem}>
-                    <Text style={styles.metricValueSmall}>{String(stateData?.physical?.recovery_status || 'ready').replace(/_/g, ' ')}</Text>
+                    <Text style={styles.metricValueSmall}>{String(dashboardData?.overview.recovery_status || stateData?.physical?.recovery_status || 'ready').replace(/_/g, ' ')}</Text>
                     <Text style={styles.metricLabel}>Recovery</Text>
                 </View>
             </SurfaceCard>
+
+            {dashboardData ? (
+                <View style={styles.dashboardSection}>
+                    <View style={styles.dashboardRow}>
+                        <SurfaceCard style={styles.dashboardCard}>
+                            <Text style={styles.dashboardCardLabel}>Readiness</Text>
+                            <Text style={styles.dashboardCardValue}>{dashboardData.overview.readiness_label.replace(/_/g, ' ')}</Text>
+                            <Text style={styles.dashboardCardMeta}>{dashboardData.overview.sets_logged} sets logged</Text>
+                        </SurfaceCard>
+                        <SurfaceCard style={styles.dashboardCard}>
+                            <Text style={styles.dashboardCardLabel}>Volume</Text>
+                            <Text style={styles.dashboardCardValue}>{dashboardData.overview.total_volume_kg.toFixed(0)} kg</Text>
+                            <Text style={styles.dashboardCardMeta}>Avg {dashboardData.overview.avg_reps_per_set} reps/set</Text>
+                        </SurfaceCard>
+                    </View>
+
+                    <SurfaceCard style={styles.insightCard}>
+                        <Text style={styles.insightTitle}>Top Coaching Insights</Text>
+                        {dashboardData.insights.slice(0, 3).map((insight) => (
+                            <View key={`${insight.type}-${insight.title}`} style={styles.insightRow}>
+                                <Text style={styles.insightRowTitle}>{insight.title}</Text>
+                                <Text style={styles.insightRowDetail}>{insight.detail}</Text>
+                            </View>
+                        ))}
+                    </SurfaceCard>
+
+                    <SurfaceCard style={styles.suggestionCard}>
+                        <Text style={styles.insightTitle}>Next Suggestions</Text>
+                        {dashboardData.suggestions.slice(0, 3).map((suggestion) => (
+                            <Text key={suggestion} style={styles.suggestionText}>- {suggestion}</Text>
+                        ))}
+                    </SurfaceCard>
+                </View>
+            ) : null}
 
             <View style={styles.historySection}>
                 <View style={styles.historyHeader}>
@@ -600,6 +644,36 @@ const styles = StyleSheet.create({
         marginTop: 14,
         paddingVertical: 14,
     },
+    dashboardSection: {
+        paddingHorizontal: 16,
+        gap: 12,
+        marginTop: 12,
+    },
+    dashboardRow: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    dashboardCard: {
+        flex: 1,
+        padding: 14,
+    },
+    dashboardCardLabel: {
+        color: '#9CA3AF',
+        fontSize: 12,
+        marginBottom: 6,
+        textTransform: 'uppercase',
+    },
+    dashboardCardValue: {
+        color: '#F9FAFB',
+        fontSize: 18,
+        fontWeight: '700',
+        marginBottom: 4,
+        textTransform: 'capitalize',
+    },
+    dashboardCardMeta: {
+        color: '#93C5FD',
+        fontSize: 12,
+    },
     metricItem: {
         flex: 1,
         alignItems: 'center',
@@ -693,6 +767,38 @@ const styles = StyleSheet.create({
     historyActionRow: {
         flexDirection: 'row',
         gap: 8,
+    },
+    insightCard: {
+        padding: 14,
+    },
+    suggestionCard: {
+        padding: 14,
+    },
+    insightTitle: {
+        color: '#F9FAFB',
+        fontSize: 15,
+        fontWeight: '700',
+        marginBottom: 10,
+    },
+    insightRow: {
+        marginBottom: 10,
+    },
+    insightRowTitle: {
+        color: '#E5E7EB',
+        fontSize: 13,
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    insightRowDetail: {
+        color: '#9CA3AF',
+        fontSize: 12,
+        lineHeight: 18,
+    },
+    suggestionText: {
+        color: '#D1FAE5',
+        fontSize: 12,
+        lineHeight: 20,
+        marginBottom: 6,
     },
     quickPromptWrap: {
         flexDirection: 'row',

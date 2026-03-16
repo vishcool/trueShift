@@ -17,6 +17,7 @@ import { useAuth } from '../hooks/useAuth';
 import { ActionChip } from '../components/ui/ActionChip';
 import { MessageBubble } from '../components/ui/MessageBubble';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
+import { useWorkoutSessionStore } from '../store/workoutSessionStore';
 
 type VoiceStatus = 'idle' | 'recording' | 'processing' | 'speaking' | 'error';
 type VoiceMode = 'general' | 'workout' | 'diet' | 'recovery';
@@ -68,6 +69,7 @@ export default function VoiceCoachScreen() {
     const [turns, setTurns] = useState<VoiceTurn[]>([]);
     const [voiceSessionId, setVoiceSessionId] = useState(`voice-${Date.now()}`);
     const [isLoadingPrefs, setIsLoadingPrefs] = useState(true);
+    const [partialTranscript, setPartialTranscript] = useState('');
 
     const wsRef = useRef<WebSocket | null>(null);
     const recordingRef = useRef<Audio.Recording | null>(null);
@@ -77,8 +79,29 @@ export default function VoiceCoachScreen() {
     const isRecordingSessionRef = useRef(false);
     const chunkSeqRef = useRef(0);
     const pendingTranscriptRef = useRef<string>('');
+    const {
+        exercises: activeExercises,
+        logs: activeLogs,
+        sessionId: activeWorkoutSessionId,
+        currentExerciseIndex,
+        applyVoiceUpdate,
+    } = useWorkoutSessionStore();
 
     const userSocketId = useMemo(() => user?.firebase_uid || user?.id, [user?.firebase_uid, user?.id]);
+    const workoutContext = useMemo(() => {
+        if (!route.params?.activeWorkout || !activeWorkoutSessionId) {
+            return null;
+        }
+
+        return {
+            session_id: activeWorkoutSessionId,
+            current_exercise_index: currentExerciseIndex,
+            exercises: activeExercises.map((exercise, idx) => ({
+                ...exercise,
+                performed_sets: activeLogs[idx] || [],
+            })),
+        };
+    }, [activeExercises, activeLogs, activeWorkoutSessionId, currentExerciseIndex, route.params?.activeWorkout]);
 
     const syncVoicePreferences = useCallback(async (updates: Partial<VoicePreferences>) => {
         try {
@@ -131,9 +154,10 @@ export default function VoiceCoachScreen() {
                 language_code: selectedLanguage,
                 voice: selectedVoice,
                 tts_enabled: ttsEnabled,
+                workout_context: workoutContext,
             })
         );
-    }, [selectedLanguage, selectedMode, selectedVoice, ttsEnabled]);
+    }, [selectedLanguage, selectedMode, selectedVoice, ttsEnabled, workoutContext]);
 
     const cleanupAudio = useCallback(async () => {
         if (chunkTimerRef.current) {
@@ -227,12 +251,17 @@ export default function VoiceCoachScreen() {
 
                     if (data.type === 'status' && data.session_id) {
                         setVoiceSessionId(data.session_id);
+                    } else if (data.type === 'transcript_partial') {
+                        setPartialTranscript(data.text || '');
                     } else if (data.type === 'transcript') {
                         pendingTranscriptRef.current = data.text || '';
+                        setPartialTranscript('');
                     } else if (data.type === 'agent_text') {
                         const newTurn = createTurn(pendingTranscriptRef.current, data.text || '');
                         pendingTranscriptRef.current = '';
                         setTurns(prev => [newTurn, ...prev]);
+                    } else if (data.type === 'workout_update' && data.data) {
+                        applyVoiceUpdate(data.data);
                     } else if (data.type === 'state') {
                         setStatus(data.status || 'idle');
                     } else if (data.type === 'audio_out') {
@@ -261,7 +290,7 @@ export default function VoiceCoachScreen() {
             wsRef.current?.close();
             cleanupAudio();
         };
-    }, [cleanupAudio, isLoadingPrefs, playBase64Audio, selectedLanguage, selectedMode, selectedVoice, sendSocketContext, ttsEnabled, userSocketId, voiceSessionId]);
+    }, [applyVoiceUpdate, cleanupAudio, isLoadingPrefs, playBase64Audio, userSocketId, voiceSessionId]);
 
     useEffect(() => {
         sendSocketContext();
@@ -346,6 +375,9 @@ export default function VoiceCoachScreen() {
         segmentBusyRef.current = true;
         try {
             await flushCurrentSegment();
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ type: 'process_segment' }));
+            }
             if (isRecordingSessionRef.current) {
                 await startSegmentRecording();
             }
@@ -504,6 +536,23 @@ export default function VoiceCoachScreen() {
                 )}
             />
 
+            {partialTranscript ? (
+                <SurfaceCard style={styles.partialCard}>
+                    <Text style={styles.partialLabel}>Live Transcript</Text>
+                    <Text style={styles.partialText}>{partialTranscript}</Text>
+                </SurfaceCard>
+            ) : null}
+
+            {route.params?.activeWorkout && workoutContext ? (
+                <SurfaceCard style={styles.partialCard}>
+                    <Text style={styles.partialLabel}>Active Workout</Text>
+                    <Text style={styles.partialText}>
+                        Exercise {currentExerciseIndex + 1} of {activeExercises.length}
+                    </Text>
+                    <Text style={styles.sessionText}>Workout Session: {activeWorkoutSessionId}</Text>
+                </SurfaceCard>
+            ) : null}
+
             <View style={styles.controls}>
                 <Text style={styles.statusText}>{getStatusText()}</Text>
                 <Text style={styles.sessionText}>Session: {voiceSessionId}</Text>
@@ -609,6 +658,22 @@ const styles = StyleSheet.create({
         fontSize: 13,
         textAlign: 'center',
         marginTop: 40,
+    },
+    partialCard: {
+        marginHorizontal: 14,
+        marginBottom: 10,
+        padding: 12,
+    },
+    partialLabel: {
+        color: '#9CA3AF',
+        fontSize: 11,
+        textTransform: 'uppercase',
+        marginBottom: 6,
+    },
+    partialText: {
+        color: '#F3F4F6',
+        fontSize: 13,
+        lineHeight: 20,
     },
     controls: {
         borderTopWidth: 1,

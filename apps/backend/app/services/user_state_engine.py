@@ -80,6 +80,7 @@ class UserStateEngine:
             # Workout events
             EventType.WORKOUT_STARTED.value: self._handle_workout_started,
             EventType.WORKOUT_COMPLETED.value: self._handle_workout_completed,
+            EventType.WORKOUT_SET_LOGGED.value: self._handle_set_logged,
             EventType.WORKOUT_EXERCISE_LOGGED.value: self._handle_exercise_logged,
 
             # Health events
@@ -140,6 +141,10 @@ class UserStateEngine:
         # Update active minutes
         if duration := payload.get("duration_minutes"):
             state.active_minutes_today += duration
+
+    async def _handle_set_logged(self, state: UserState, event: Event) -> None:
+        """Handle set-level workout logging."""
+        state.current_activity_level = ActivityLevel.ACTIVE.value
 
     async def _handle_exercise_logged(self, state: UserState, event: Event) -> None:
         """Handle individual exercise logging."""

@@ -9,7 +9,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -39,6 +39,7 @@ class EventType(str, Enum):
     WORKOUT_STARTED = "workout.started"
     WORKOUT_COMPLETED = "workout.completed"
     WORKOUT_PAUSED = "workout.paused"
+    WORKOUT_SET_LOGGED = "workout.set_logged"
     WORKOUT_EXERCISE_LOGGED = "workout.exercise_logged"
 
     # Health & Fitness
@@ -59,6 +60,8 @@ class EventType(str, Enum):
     AI_RECOMMENDATION_GENERATED = "ai.recommendation_generated"
     AI_COACHING_DELIVERED = "ai.coaching_delivered"
     AI_FEEDBACK_RECEIVED = "ai.feedback_received"
+    VOICE_SESSION_STARTED = "voice.session_started"
+    VOICE_TURN_COMPLETED = "voice.turn_completed"
 
     # System Events
     SESSION_STARTED = "session.started"
@@ -110,16 +113,18 @@ class Event(BaseModel):
 
     # Optional metadata
     session_id: Mapped[Optional[str]] = mapped_column(
-        UUID(as_uuid=False),
+        String(128),
         nullable=True,
+        index=True,
     )
     device_info: Mapped[Optional[dict]] = mapped_column(
         JSONB,
         nullable=True,
     )
     correlation_id: Mapped[Optional[str]] = mapped_column(
-        UUID(as_uuid=False),
+        String(128),
         nullable=True,
+        index=True,
     )
 
     # Processing status

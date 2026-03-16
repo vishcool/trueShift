@@ -5,12 +5,14 @@ Coordinates multi-agent AI processing pipelines.
 Following Google ADK patterns for agent orchestration.
 """
 
+import asyncio
 from typing import Any, Optional
 from datetime import datetime, timezone
 
 from app.ai.agents.base_agent import AgentContext, AgentResponse
 from app.ai.agents.context_agent import ContextAgent
 from app.ai.agents.coaching_agent import CoachingAgent
+from app.ai.agents.planner_agent import PlannerAgent
 from app.ai.agents.workout_agent import WorkoutAgent
 from app.ai.agents.mental_agent import MentalWellnessAgent
 from app.ai.agents.recovery_agent import RecoveryAgent
@@ -30,6 +32,7 @@ class OrchestratorResult:
         user_id: str,
         timestamp: datetime,
         context_summary: Optional[dict] = None,
+        planner: Optional[dict] = None,
         coaching: Optional[dict] = None,
         workout: Optional[dict] = None,
         mental: Optional[dict] = None,
@@ -39,6 +42,7 @@ class OrchestratorResult:
         self.user_id = user_id
         self.timestamp = timestamp
         self.context_summary = context_summary
+        self.planner = planner
         self.coaching = coaching
         self.workout = workout
         self.mental = mental
@@ -50,6 +54,7 @@ class OrchestratorResult:
             "user_id": self.user_id,
             "timestamp": self.timestamp.isoformat(),
             "context_summary": self.context_summary,
+            "planner": self.planner,
             "coaching": self.coaching,
             "workout": self.workout,
             "mental": self.mental,
@@ -71,6 +76,7 @@ class AIOrchestrator:
     def __init__(self):
         # Initialize agents
         self.context_agent = ContextAgent()
+        self.planner_agent = PlannerAgent()
         self.coaching_agent = CoachingAgent()
         self.workout_agent = WorkoutAgent()
         self.mental_agent = MentalWellnessAgent()
@@ -114,36 +120,29 @@ class AIOrchestrator:
         if context_result.success and context_result.content:
             context.additional_context["context_summary"] = context_result.content
 
-        # Step 2 & 3: Run coaching and workout agents (can be parallel)
-        coaching_result = await self._run_agent(
-            self.coaching_agent,
+        planner_result = await self._run_agent(
+            self.planner_agent,
             context,
-            "Coaching Agent",
+            "Planner Agent",
         )
+        if not planner_result.success:
+            errors.append(f"Planner Agent failed: {planner_result.content}")
+        elif planner_result.content:
+            context.additional_context["planner"] = planner_result.content
+
+        coaching_result, workout_result, mental_result, recovery_result = await asyncio.gather(
+            self._run_agent(self.coaching_agent, context, "Coaching Agent"),
+            self._run_agent(self.workout_agent, context, "Workout Agent"),
+            self._run_agent(self.mental_agent, context, "Mental Wellness Agent"),
+            self._run_agent(self.recovery_agent, context, "Recovery Agent"),
+        )
+
         if not coaching_result.success:
             errors.append(f"Coaching Agent failed: {coaching_result.content}")
-
-        workout_result = await self._run_agent(
-            self.workout_agent,
-            context,
-            "Workout Agent",
-        )
         if not workout_result.success:
             errors.append(f"Workout Agent failed: {workout_result.content}")
-
-        mental_result = await self._run_agent(
-            self.mental_agent,
-            context,
-            "Mental Wellness Agent",
-        )
         if not mental_result.success:
             errors.append(f"Mental Agent failed: {mental_result.content}")
-
-        recovery_result = await self._run_agent(
-            self.recovery_agent,
-            context,
-            "Recovery Agent",
-        )
         if not recovery_result.success:
             errors.append(f"Recovery Agent failed: {recovery_result.content}")
 
@@ -152,6 +151,7 @@ class AIOrchestrator:
             user_id=user_id,
             timestamp=datetime.now(timezone.utc),
             context_summary=context_result.content if context_result.success else None,
+            planner=planner_result.content if planner_result.success else None,
             coaching=coaching_result.content if coaching_result.success else None,
             workout=workout_result.content if workout_result.success else None,
             mental=mental_result.content if mental_result.success else None,

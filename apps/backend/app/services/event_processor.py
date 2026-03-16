@@ -10,6 +10,7 @@ from typing import Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event, EventSource, EventType
@@ -66,6 +67,17 @@ class EventProcessor:
         """
         # Validate event type is known
         self._validate_event_type(event_payload.event_type)
+
+        if event_payload.correlation_id:
+            existing_result = await self.db.execute(
+                select(Event).where(
+                    Event.user_id == user_id,
+                    Event.correlation_id == event_payload.correlation_id,
+                )
+            )
+            existing_event = existing_result.scalar_one_or_none()
+            if existing_event:
+                return existing_event
 
         # Create event record
         event = Event.create(

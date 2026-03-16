@@ -10,7 +10,7 @@ Handles the full voice pipeline:
 
 import logging
 import json
-import asyncio
+import re
 from typing import Dict, Any, Optional
 
 import aiohttp
@@ -79,7 +79,7 @@ class VoiceAgentService:
         transcript: str,
         user_state: UserState,
         session_context: Optional[Dict[str, Any]] = None
-    ) -> str:
+    ) -> Dict[str, Any]:
         """
         Routes the transcript to the correct specialized agent and extracts a conversational response.
         """
@@ -90,10 +90,20 @@ class VoiceAgentService:
         context = AgentContext(
             user_id=user_id,
             user_state=user_state.get_context_summary() if hasattr(user_state, 'get_context_summary') else user_state,
+            additional_context={
+                "user_input": transcript,
+                "mode": (session_context or {}).get("mode", "general"),
+            },
         )
-        
-        response_obj = None
-        
+
+        planner_res = await ai_orchestrator.planner_agent.process(context)
+        if planner_res.success and isinstance(planner_res.content, dict):
+            planned_domain = planner_res.content.get("primary_domain")
+            if planned_domain in {"workout", "recovery", "mental", "coaching"}:
+                intent = planned_domain
+
+        workout_update = self._extract_workout_update(transcript, session_context or {})
+
         # Dispatch to specific agent based on intent
         if intent == "workout":
             # For workout requests, we ideally want conversational text wrapping the plan, but we'll use CoachingAgent 
@@ -102,21 +112,36 @@ class VoiceAgentService:
             workout_res = await ai_orchestrator.workout_agent.process(context)
             if workout_res.success and isinstance(workout_res.content, dict):
                 workout_name = workout_res.content.get("name", "workout")
-                return f"I've got a plan for you. Let's do a {workout_name}. {workout_res.reasoning}"
+                text = f"I've got a plan for you. Let's do a {workout_name}. {workout_res.reasoning}"
+                if workout_update:
+                    text = self._blend_workout_update(text, workout_update)
+                return {"text": text, "workout_update": workout_update}
                 
         elif intent == "recovery":
             recovery_res = await ai_orchestrator.recovery_agent.process(context)
             if recovery_res.success and isinstance(recovery_res.content, str):
-                return recovery_res.content
+                text = recovery_res.content
+                if workout_update:
+                    text = self._blend_workout_update(text, workout_update)
+                return {"text": text, "workout_update": workout_update}
             elif recovery_res.success and isinstance(recovery_res.content, dict):
-                 return recovery_res.content.get("summary", "Make sure you rest.")
+                 text = recovery_res.content.get("summary", "Make sure you rest.")
+                 if workout_update:
+                     text = self._blend_workout_update(text, workout_update)
+                 return {"text": text, "workout_update": workout_update}
                  
         elif intent == "mental":
             mental_res = await ai_orchestrator.mental_agent.process(context)
             if mental_res.success and isinstance(mental_res.content, str):
-                return mental_res.content
+                text = mental_res.content
+                if workout_update:
+                    text = self._blend_workout_update(text, workout_update)
+                return {"text": text, "workout_update": workout_update}
             elif mental_res.success and isinstance(mental_res.content, dict):
-                 return mental_res.content.get("summary", "Take a deep breath. You're doing great.")
+                 text = mental_res.content.get("summary", "Take a deep breath. You're doing great.")
+                 if workout_update:
+                     text = self._blend_workout_update(text, workout_update)
+                 return {"text": text, "workout_update": workout_update}
                  
         # Default / General (Coaching Agent acts as generic chat wrapper)
         # Using Coaching agent with the transcript injected
@@ -144,13 +169,93 @@ class VoiceAgentService:
         
         if general_res.success:
             if isinstance(general_res.content, str):
-                return general_res.content
+                text = general_res.content
+                if workout_update:
+                    text = self._blend_workout_update(text, workout_update)
+                return {"text": text, "workout_update": workout_update}
             elif isinstance(general_res.content, dict) and "message" in general_res.content:
-                return general_res.content["message"]
+                text = general_res.content["message"]
+                if workout_update:
+                    text = self._blend_workout_update(text, workout_update)
+                return {"text": text, "workout_update": workout_update}
             elif isinstance(general_res.content, dict) and "summary" in general_res.content:
-                return general_res.content["summary"]
+                text = general_res.content["summary"]
+                if workout_update:
+                    text = self._blend_workout_update(text, workout_update)
+                return {"text": text, "workout_update": workout_update}
                 
-        return "I heard you, let's keep working."
+        fallback = "I heard you, let's keep working."
+        if workout_update:
+            fallback = self._blend_workout_update(fallback, workout_update)
+        return {"text": fallback, "workout_update": workout_update}
+
+    def _blend_workout_update(self, text: str, workout_update: Dict[str, Any]) -> str:
+        update_type = workout_update.get("type")
+        if update_type == "log_set":
+            return (
+                f"{text} I logged set {workout_update.get('set_number')} "
+                f"for {workout_update.get('reps')} reps at {workout_update.get('weight')}."
+            )
+        if update_type == "advance_exercise":
+            return f"{text} Moving you to the next exercise."
+        if update_type == "recovery_flag":
+            return f"{text} I marked this as a recovery warning for the current workout."
+        return text
+
+    def _extract_workout_update(
+        self,
+        transcript: str,
+        session_context: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        workout_context = session_context.get("workout_context") or {}
+        exercises = workout_context.get("exercises") or []
+        if not exercises:
+            return None
+
+        current_exercise_index = int(workout_context.get("current_exercise_index") or 0)
+        lower = transcript.lower()
+
+        if any(token in lower for token in ["next exercise", "move on", "skip exercise"]):
+            return {
+                "type": "advance_exercise",
+                "exercise_index": min(current_exercise_index + 1, max(len(exercises) - 1, 0)),
+                "current_exercise_index": min(current_exercise_index + 1, max(len(exercises) - 1, 0)),
+                "completed_at": self._now_iso(),
+            }
+
+        if any(token in lower for token in ["pain", "sharp pain", "dizzy", "too sore"]):
+            return {
+                "type": "recovery_flag",
+                "exercise_index": current_exercise_index,
+                "current_exercise_index": current_exercise_index,
+                "note": transcript,
+                "completed_at": self._now_iso(),
+            }
+
+        reps_match = re.search(r"(\d+)\s*reps?", lower)
+        weight_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:kg|kgs|kilograms|lb|lbs|pounds)", lower)
+        set_match = re.search(r"set\s*(\d+)", lower)
+
+        if reps_match or weight_match:
+            existing_sets = exercises[current_exercise_index].get("performed_sets", [])
+            set_number = int(set_match.group(1)) if set_match else len(existing_sets) + 1
+            return {
+                "type": "log_set",
+                "exercise_index": current_exercise_index,
+                "current_exercise_index": current_exercise_index,
+                "set_number": set_number,
+                "reps": reps_match.group(1) if reps_match else "",
+                "weight": weight_match.group(1) if weight_match else "",
+                "completed_at": self._now_iso(),
+                "source": "voice",
+            }
+
+        return None
+
+    def _now_iso(self) -> str:
+        from datetime import datetime, timezone
+
+        return datetime.now(timezone.utc).isoformat()
 
     async def generate_tts(
         self,

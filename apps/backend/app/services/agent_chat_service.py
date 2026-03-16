@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.llm_service import gemini_service
 from app.services.agent_memory_service import agent_memory_service
+from app.services.user_service import user_service
 
 logger = logging.getLogger(__name__)
 
@@ -145,16 +146,10 @@ Respond directly in JSON."""
         Main chat function with user memory and action handling.
         """
         try:
-            # Get user object (needed for workout service)
-            from sqlalchemy import select
             from app.models.user import User
             
             logger.info(f"Fetching user with id/firebase_uid: {user_id}")
-            user_result = await db.execute(select(User).where(User.id == user_id))
-            user = user_result.scalar_one_or_none()
-            if not user:
-                user_result = await db.execute(select(User).where(User.firebase_uid == user_id))
-                user = user_result.scalar_one_or_none()
+            user = await user_service.resolve_user_by_any_id(db, user_id)
             
             # Auto-create user if this is their first conversation
             if not user:
@@ -175,8 +170,10 @@ Respond directly in JSON."""
             else:
                 logger.info(f"Found user: id={user.id}, firebase_uid={user.firebase_uid}")
 
+            canonical_user_id = str(user.id)
+
             # Get user memory
-            user_memory = await agent_memory_service.get_user_memory(db, user_id)
+            user_memory = await agent_memory_service.get_user_memory(db, canonical_user_id)
             
             # Build prompts
             system_prompt = AgentChatService.build_system_prompt(user_memory)
@@ -186,12 +183,12 @@ Respond directly in JSON."""
             
             # Save user message
             await agent_memory_service.save_conversation(
-                db=db, user_id=user_id, role="user", content=message,
+                db=db, user_id=canonical_user_id, role="user", content=message,
                 session_id=context.get("session_id") if context else None
             )
             
             # Call Gemini
-            logger.info(f"Calling Gemini for user {user_id}")
+            logger.info(f"Calling Gemini for user {canonical_user_id}")
             gemini_response = await gemini_service.generate_content(
                 prompt=conversation_prompt,
                 system_instruction=system_prompt,
@@ -268,7 +265,7 @@ Respond directly in JSON."""
 
             # Save agent response (Clean text only)
             await agent_memory_service.save_conversation(
-                db=db, user_id=user_id, role="model", content=response_text,
+                db=db, user_id=canonical_user_id, role="model", content=response_text,
                 agent_name="WorkoutAgent",
                 session_id=context.get("session_id") if context else None
             )
@@ -277,7 +274,7 @@ Respond directly in JSON."""
                 "response": response_text,
                 "action": action_data.get("action"), # To frontend
                 "data": action_data.get("data"),     # To frontend
-                "conversation_id": user_memory.get("conversation_context", {}).get("session_id")
+                "conversation_id": canonical_user_id
             }
             
         except Exception as e:

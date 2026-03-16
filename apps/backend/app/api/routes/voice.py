@@ -6,6 +6,7 @@ Real-time WebSocket endpoints for conversational AI coaching and voice preferenc
 
 import json
 import logging
+from hashlib import sha1
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -16,8 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.conversation import ConversationLog
+from app.models.event import EventSource, EventType
 from app.models.user import User
 from app.services.agent_memory_service import agent_memory_service
+from app.services.event_processor import EventPayload, EventProcessor
 from app.services.user_state_engine import UserStateEngine
 from app.services.voice_agent_service import voice_agent_service
 
@@ -56,6 +59,113 @@ def _voice_preferences_from_user(user: User) -> dict:
         "default_mode": voice.get("default_mode", "general"),
         "tts_enabled": bool(voice.get("tts_enabled", True)),
     }
+
+
+async def _transcribe_audio_buffer(sarvam_client, audio_buffer: list[str], language_code: str) -> str:
+    transcript = ""
+    if not audio_buffer:
+        return transcript
+
+    async with sarvam_client.speech_to_text_streaming.connect(
+        model="saaras:v3",
+        mode="transcribe",
+        language_code=language_code,
+        high_vad_sensitivity=False,
+        flush_signal=True,
+    ) as ws_stt:
+        merged_audio = "".join(audio_buffer)
+        await ws_stt.transcribe(
+            audio=merged_audio,
+            encoding="audio/wav",
+            sample_rate=16000,
+        )
+        await ws_stt.flush()
+
+        stt_response = await ws_stt.recv()
+        if isinstance(stt_response, str):
+            try:
+                parsed = json.loads(stt_response)
+                transcript = parsed.get("text", stt_response)
+            except json.JSONDecodeError:
+                transcript = stt_response
+
+    return transcript.strip()
+
+
+async def _persist_voice_turn_event(
+    db: AsyncSession,
+    user_id: str,
+    session_context: dict,
+    transcript: str,
+) -> None:
+    processor = EventProcessor(db)
+    workout_context = session_context.get("workout_context") or {}
+    workout_session_id = workout_context.get("session_id")
+    transcript_clean = transcript.strip()
+    transcript_digest = sha1(transcript_clean.encode("utf-8")).hexdigest()[:16]
+    await processor.process(
+        user_id=user_id,
+        event_payload=EventPayload(
+            event_type=EventType.VOICE_TURN_COMPLETED.value,
+            payload={
+                "mode": session_context.get("mode", "general"),
+                "language_code": session_context.get("language_code", "en-IN"),
+                "workout_session_id": workout_session_id,
+                "transcript_length": len(transcript_clean),
+            },
+            session_id=session_context.get("session_id"),
+            correlation_id=f"voice-turn:{session_context.get('session_id')}:{len(transcript_clean)}:{transcript_digest}",
+        ),
+        source=EventSource.AI,
+    )
+
+
+async def _persist_voice_workout_update(
+    db: AsyncSession,
+    user_id: str,
+    session_context: dict,
+    workout_update: dict,
+) -> None:
+    if workout_update.get("type") != "log_set":
+        return
+
+    processor = EventProcessor(db)
+    workout_context = session_context.get("workout_context") or {}
+    exercises = workout_context.get("exercises") or []
+    exercise_index = int(workout_update.get("exercise_index") or 0)
+    exercise_name = ""
+    if 0 <= exercise_index < len(exercises):
+        exercise_name = str(exercises[exercise_index].get("name", "Exercise"))
+
+    session_id = workout_context.get("session_id") or session_context.get("session_id")
+    completed_at = workout_update.get("completed_at")
+    correlation_bits = [
+        str(session_id or "voice-session"),
+        str(exercise_index),
+        str(workout_update.get("set_number", "")),
+        str(workout_update.get("reps", "")),
+        str(workout_update.get("weight", "")),
+        str(completed_at or ""),
+    ]
+
+    await processor.process(
+        user_id=user_id,
+        event_payload=EventPayload(
+            event_type=EventType.WORKOUT_SET_LOGGED.value,
+            payload={
+                "exercise_index": exercise_index,
+                "exercise_name": exercise_name,
+                "set_number": workout_update.get("set_number"),
+                "reps": workout_update.get("reps"),
+                "weight": workout_update.get("weight"),
+                "completed_at": completed_at,
+                "source": workout_update.get("source", "voice"),
+            },
+            session_id=session_id,
+            correlation_id=f"voice-set:{':'.join(correlation_bits)}",
+        ),
+        source=EventSource.AI,
+    )
 
 
 @router.get("/preferences", response_model=VoicePreferencesResponse)
@@ -189,7 +299,7 @@ async def voice_websocket_endpoint(websocket: WebSocket, user_id: str):
 
             internal_user_id = str(user.id)
             state_engine = UserStateEngine(db)
-            user_state = await state_engine.get_or_create_state(internal_user_id)
+            await state_engine.get_or_create_state(internal_user_id)
 
             voice_preferences = _voice_preferences_from_user(user)
             voice_session_id = f"voice-{uuid4().hex[:12]}"
@@ -200,13 +310,15 @@ async def voice_websocket_endpoint(websocket: WebSocket, user_id: str):
                 "voice": websocket.query_params.get("voice", voice_preferences["preferred_voice"]),
                 "tts_enabled": (query_tts.lower() == "true") if isinstance(query_tts, str) else voice_preferences["tts_enabled"],
                 "session_id": websocket.query_params.get("session_id", voice_session_id),
+                "partial_transcripts": [],
+                "workout_context": None,
             }
 
             await websocket.send_json(
                 {
                     "type": "status",
                     "message": "Connected to Voice Coach",
-                    "session_id": voice_session_id,
+                    "session_id": session_context["session_id"],
                     "voice_preferences": voice_preferences,
                 }
             )
@@ -229,6 +341,7 @@ async def voice_websocket_endpoint(websocket: WebSocket, user_id: str):
                     language_code = data.get("language_code")
                     voice = data.get("voice")
                     tts_enabled = data.get("tts_enabled")
+                    workout_context = data.get("workout_context")
 
                     if isinstance(mode, str) and mode:
                         session_context["mode"] = mode.strip().lower()
@@ -238,6 +351,8 @@ async def voice_websocket_endpoint(websocket: WebSocket, user_id: str):
                         session_context["voice"] = voice
                     if isinstance(tts_enabled, bool):
                         session_context["tts_enabled"] = tts_enabled
+                    if isinstance(workout_context, dict):
+                        session_context["workout_context"] = workout_context
                     continue
 
                 if msg_type == "start":
@@ -247,6 +362,23 @@ async def voice_websocket_endpoint(websocket: WebSocket, user_id: str):
                     else:
                         session_context["session_id"] = f"voice-{uuid4().hex[:12]}"
                     audio_buffer.clear()
+                    session_context["partial_transcripts"] = []
+                    processor = EventProcessor(db)
+                    await processor.process(
+                        user_id=internal_user_id,
+                        event_payload=EventPayload(
+                            event_type=EventType.VOICE_SESSION_STARTED.value,
+                            payload={
+                                "mode": session_context.get("mode", "general"),
+                                "language_code": session_context.get("language_code", "en-IN"),
+                                "tts_enabled": bool(session_context.get("tts_enabled", True)),
+                                "workout_session_id": (session_context.get("workout_context") or {}).get("session_id"),
+                            },
+                            session_id=session_context["session_id"],
+                            correlation_id=f"voice-session-start:{session_context['session_id']}",
+                        ),
+                        source=EventSource.AI,
+                    )
                     await websocket.send_json({"type": "state", "status": "idle", "session_id": session_context["session_id"]})
                     continue
 
@@ -256,8 +388,29 @@ async def voice_websocket_endpoint(websocket: WebSocket, user_id: str):
                         audio_buffer.append(b64_audio)
                     continue
 
-                if msg_type == "stop":
+                if msg_type == "process_segment":
                     if not audio_buffer:
+                        continue
+                    try:
+                        transcript_partial = await _transcribe_audio_buffer(
+                            sarvam_client,
+                            audio_buffer,
+                            session_context.get("language_code", "en-IN"),
+                        )
+                    except Exception as exc:
+                        logger.error("Partial STT Error: %s", exc)
+                        await websocket.send_json({"type": "error", "message": "Partial transcription failed."})
+                        audio_buffer.clear()
+                        continue
+
+                    audio_buffer.clear()
+                    if transcript_partial:
+                        session_context["partial_transcripts"].append(transcript_partial)
+                        await websocket.send_json({"type": "transcript_partial", "text": transcript_partial})
+                    continue
+
+                if msg_type == "stop":
+                    if not audio_buffer and not session_context["partial_transcripts"]:
                         await websocket.send_json({"type": "status", "message": "No audio received"})
                         continue
 
@@ -265,28 +418,11 @@ async def voice_websocket_endpoint(websocket: WebSocket, user_id: str):
 
                     transcript = ""
                     try:
-                        async with sarvam_client.speech_to_text_streaming.connect(
-                            model="saaras:v3",
-                            mode="transcribe",
-                            language_code=session_context.get("language_code", "en-IN"),
-                            high_vad_sensitivity=False,
-                            flush_signal=True,
-                        ) as ws_stt:
-                            merged_audio = "".join(audio_buffer)
-                            await ws_stt.transcribe(
-                                audio=merged_audio,
-                                encoding="audio/wav",
-                                sample_rate=16000,
-                            )
-                            await ws_stt.flush()
-
-                            stt_response = await ws_stt.recv()
-                            if isinstance(stt_response, str):
-                                try:
-                                    parsed = json.loads(stt_response)
-                                    transcript = parsed.get("text", stt_response)
-                                except json.JSONDecodeError:
-                                    transcript = stt_response
+                        transcript = await _transcribe_audio_buffer(
+                            sarvam_client,
+                            audio_buffer,
+                            session_context.get("language_code", "en-IN"),
+                        )
                     except Exception as exc:
                         logger.error("STT Error: %s", exc)
                         await websocket.send_json({"type": "error", "message": "Transcription failed."})
@@ -294,28 +430,55 @@ async def voice_websocket_endpoint(websocket: WebSocket, user_id: str):
                         continue
 
                     audio_buffer.clear()
+                    all_parts = session_context.get("partial_transcripts", [])
+                    full_transcript = " ".join([*all_parts, transcript]).strip()
+                    session_context["partial_transcripts"] = []
 
-                    if not transcript or len(transcript.strip()) < 2:
+                    if not full_transcript or len(full_transcript.strip()) < 2:
                         await websocket.send_json({"type": "state", "status": "idle"})
                         continue
 
-                    await websocket.send_json({"type": "transcript", "text": transcript})
+                    await websocket.send_json({"type": "transcript", "text": full_transcript})
+
+                    await _persist_voice_turn_event(
+                        db=db,
+                        user_id=internal_user_id,
+                        session_context=session_context,
+                        transcript=full_transcript,
+                    )
 
                     await agent_memory_service.save_conversation(
                         db,
                         internal_user_id,
                         "user",
-                        transcript,
+                        full_transcript,
                         session_id=session_context["session_id"],
                         agent_name="VoiceRouter",
                     )
 
-                    agent_reply = await voice_agent_service.get_agent_response(
+                    latest_user_state = await state_engine.get_or_create_state(internal_user_id)
+                    agent_result = await voice_agent_service.get_agent_response(
                         internal_user_id,
-                        transcript,
-                        user_state,
+                        full_transcript,
+                        latest_user_state,
                         session_context=session_context,
                     )
+                    agent_reply = agent_result.get("text", "I heard you, let's keep working.")
+                    workout_update = agent_result.get("workout_update")
+                    if isinstance(workout_update, dict):
+                        await _persist_voice_workout_update(
+                            db=db,
+                            user_id=internal_user_id,
+                            session_context=session_context,
+                            workout_update=workout_update,
+                        )
+                        session_context["workout_context"] = {
+                            **(session_context.get("workout_context") or {}),
+                            "current_exercise_index": workout_update.get(
+                                "current_exercise_index",
+                                (session_context.get("workout_context") or {}).get("current_exercise_index", 0),
+                            ),
+                        }
 
                     await agent_memory_service.save_conversation(
                         db,
@@ -327,6 +490,8 @@ async def voice_websocket_endpoint(websocket: WebSocket, user_id: str):
                     )
 
                     await websocket.send_json({"type": "agent_text", "text": agent_reply})
+                    if isinstance(workout_update, dict):
+                        await websocket.send_json({"type": "workout_update", "data": workout_update})
 
                     if session_context.get("tts_enabled", True):
                         await websocket.send_json({"type": "state", "status": "speaking"})

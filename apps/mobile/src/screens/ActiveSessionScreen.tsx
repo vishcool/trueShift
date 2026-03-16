@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     Alert,
     KeyboardAvoidingView,
@@ -12,8 +12,10 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
-import { api } from '../api/client';
+import { api, WorkoutRecordedExercise } from '../api/client';
 import { SurfaceCard } from '../components/ui/SurfaceCard';
+import { useWorkoutSessionStore } from '../store/workoutSessionStore';
+import { trackEvent } from '../services/BackgroundSync';
 
 interface SetLog {
     weight: string;
@@ -25,44 +27,77 @@ export default function ActiveSessionScreen() {
     const route = useRoute<any>();
     const { exercises } = route.params || { exercises: [] };
 
-    const [logs, setLogs] = useState<Record<number, SetLog[]>>({});
     const [submitting, setSubmitting] = useState(false);
     const [sessionStart] = useState(Date.now());
+    const {
+        logs,
+        sessionId,
+        initializeSession,
+        updateLog: updateWorkoutLog,
+        currentExerciseIndex,
+        clearSession,
+    } = useWorkoutSessionStore();
 
     const estimatedDuration = useMemo(() => {
         const mins = Math.round((Date.now() - sessionStart) / 60000);
         return Math.max(mins, 1);
     }, [sessionStart]);
 
-    const updateLog = (exerciseIdx: number, setIdx: number, field: 'weight' | 'reps', value: string) => {
-        const currentExLogs = logs[exerciseIdx] || [];
-        const newExLogs = [...currentExLogs];
-        if (!newExLogs[setIdx]) {
-            newExLogs[setIdx] = { weight: '', reps: '' };
-        }
+    useEffect(() => {
+        initializeSession(exercises);
+    }, [exercises, initializeSession]);
 
-        newExLogs[setIdx] = { ...newExLogs[setIdx], [field]: value };
-        setLogs((prev) => ({ ...prev, [exerciseIdx]: newExLogs }));
+    useEffect(() => {
+        if (!sessionId) {
+            return;
+        }
+        trackEvent('workout.started', {
+            session_id: sessionId,
+            workout_type: 'guided_session',
+            planned_exercise_count: exercises.length,
+        }).catch(() => undefined);
+    }, [exercises.length, sessionId]);
+
+    const updateLog = (exerciseIdx: number, setIdx: number, field: 'weight' | 'reps', value: string) => {
+        updateWorkoutLog(exerciseIdx, setIdx, field, value);
     };
 
     const finishWorkout = async () => {
         setSubmitting(true);
         try {
             const workoutData = {
-                exercises: exercises.map((ex: any, idx: number) => ({
+                exercises: exercises.map((ex: any, idx: number): WorkoutRecordedExercise => ({
                     name: ex.name,
                     target_sets: ex.sets,
                     target_reps: ex.reps,
-                    performed_sets: logs[idx] || [],
+                    performed_sets: (logs[idx] || []).map((setLog, setIndex) => ({
+                        set_number: setIndex + 1,
+                        weight: setLog.weight,
+                        reps: setLog.reps,
+                        completed_at: new Date().toISOString(),
+                    })),
                 })),
                 duration_minutes: estimatedDuration,
                 completed_at: new Date().toISOString(),
+                session_id: sessionId || undefined,
             };
 
             await api.workout.record(workoutData);
+            await trackEvent('workout.completed', {
+                session_id: sessionId,
+                workout_type: 'guided_session',
+                duration_minutes: estimatedDuration,
+                exercise_count: exercises.length,
+            });
 
             Alert.alert('Great Job!', 'Workout saved successfully.', [
-                { text: 'OK', onPress: () => navigation.navigate('Profile') },
+                {
+                    text: 'OK',
+                    onPress: () => {
+                        clearSession();
+                        navigation.navigate('Profile');
+                    },
+                },
             ]);
         } catch {
             Alert.alert('Error', 'Failed to save workout. Please try again.');
@@ -81,14 +116,22 @@ export default function ActiveSessionScreen() {
                     <Text style={styles.closeText}>Quit</Text>
                 </TouchableOpacity>
                 <Text style={styles.timer}>{estimatedDuration} min</Text>
-                <TouchableOpacity onPress={finishWorkout} disabled={submitting}>
-                    <Text style={styles.finishText}>{submitting ? 'Saving...' : 'Finish'}</Text>
-                </TouchableOpacity>
+                <View style={styles.headerActions}>
+                    <TouchableOpacity onPress={() => navigation.navigate('VoiceCoach', { initialMode: 'workout', activeWorkout: true })}>
+                        <Text style={styles.voiceText}>Coach</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={finishWorkout} disabled={submitting}>
+                        <Text style={styles.finishText}>{submitting ? 'Saving...' : 'Finish'}</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
                 {exercises.map((ex: any, idx: number) => (
-                    <SurfaceCard key={idx} style={styles.exerciseCard}>
+                    <SurfaceCard
+                        key={idx}
+                        style={idx === currentExerciseIndex ? { ...styles.exerciseCard, ...styles.exerciseCardActive } : styles.exerciseCard}
+                    >
                         <Text style={styles.exerciseName}>{ex.name}</Text>
                         <Text style={styles.targetText}>Target: {ex.sets} sets x {ex.reps}</Text>
 
@@ -139,6 +182,12 @@ const styles = StyleSheet.create({
     closeText: { color: '#F87171', fontSize: 16 },
     timer: { color: '#F3F4F6', fontSize: 18, fontWeight: '700' },
     finishText: { color: '#93C5FD', fontSize: 16, fontWeight: '700' },
+    voiceText: { color: '#FCD34D', fontSize: 16, fontWeight: '700' },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+    },
     content: {
         flex: 1,
     },
@@ -148,6 +197,10 @@ const styles = StyleSheet.create({
     exerciseCard: {
         padding: 14,
         marginBottom: 14,
+    },
+    exerciseCardActive: {
+        borderWidth: 1,
+        borderColor: '#F59E0B',
     },
     exerciseName: {
         color: '#FFFFFF',
